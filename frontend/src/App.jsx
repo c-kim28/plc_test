@@ -118,10 +118,10 @@ function readBitsAsNumber(offset, len, getBit, littleEndian) {
 /** 드롭다운 값 '1'|'2'|'3'|'4' → { orderReversed, littleEndian } */
 function getParseOptionsFromMode(mode) {
   switch (mode) {
-    case '1': return { orderReversed: false, littleEndian: true }   // 목록 앞→뒤, 리틀
-    case '2': return { orderReversed: false, littleEndian: false } // 목록 앞→뒤, 빅
-    case '3': return { orderReversed: true, littleEndian: true }    // 목록 뒤→앞, 리틀
-    case '4': return { orderReversed: true, littleEndian: false }  // 목록 뒤→앞, 빅
+    case '1': return { orderReversed: false, littleEndian: true }   // 목록 정순, 리틀
+    case '2': return { orderReversed: false, littleEndian: false } // 목록 정순, 빅
+    case '3': return { orderReversed: true, littleEndian: true }    // 목록 역순, 리틀
+    case '4': return { orderReversed: true, littleEndian: false }  // 목록 역순, 빅
     default: return { orderReversed: false, littleEndian: false }
   }
 }
@@ -583,10 +583,10 @@ function App() {
                       onChange={(e) => setParsedEndianMode(e.target.value)}
                       aria-label="순서·엔디안 파싱 모드"
                     >
-                      <option value="1">1. 목록 앞→뒤, 비트 리틀엔디안</option>
-                      <option value="2">2. 목록 앞→뒤, 비트 빅엔디안</option>
-                      <option value="3">3. 목록 뒤→앞, 비트 리틀엔디안</option>
-                      <option value="4">4. 목록 뒤→앞, 비트 빅엔디안</option>
+                      <option value="1">1. 목록 정순, 비트 리틀엔디안</option>
+                      <option value="2">2. 목록 정순, 비트 빅엔디안</option>
+                      <option value="3">3. 목록 역순, 비트 리틀엔디안</option>
+                      <option value="4">4. 목록 역순, 비트 빅엔디안</option>
                     </select>
                   </label>
                 </div>
