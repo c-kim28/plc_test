@@ -709,9 +709,9 @@ function App() {
                     </button>
                   </div>
                   {modbusError && <p className="error-message">{modbusError}</p>}
-                  {modbusConnected && <p className="modbus-status">경고등/알람 1분 간격, 데이터 1초 간격 폴링 중</p>}
+                  {modbusConnected && <p className="modbus-status">경고등/알람(Boolean) 3초 간격, 데이터 1초 간격 폴링 중</p>}
                 </section>
-                <p className="parsed-view-hint">io_variables.json과 동일한 목록. Coil 0~106(경고 107개) 1분 간격, Holding Registers 1초 간격.</p>
+                <p className="parsed-view-hint">io_variables.json과 동일한 목록. Coil 0~106(Boolean) 3초 간격, Holding Registers 1초 간격.</p>
                 <div className="parsed-meta-toolbar">
                   <span className="parsed-meta-toolbar-label">표시 열</span>
                   <div className="parsed-meta-toolbar-checks">
@@ -744,7 +744,12 @@ function App() {
                       <span className="parsed-var-name">변수명</span>
                       {showBitsCol && <span className="parsed-var-bits">2진수</span>}
                       {showHexCol && <span className="parsed-var-hex">16진수</span>}
-                      {showValueCol && <span className="parsed-var-value">값</span>}
+                      {showValueCol && (
+                        <span className="parsed-var-value-wrap">
+                          <span className="boolean-dot-header-spacer" aria-hidden />
+                          <span className="parsed-var-value">값</span>
+                        </span>
+                      )}
                       {(showMetaBit || showMetaType || showMetaDesc) && (
                         <div
                           className="parsed-var-meta-cols"
@@ -787,7 +792,14 @@ function App() {
                             {formatParsedValueAsHex(modbusValues[name], info.length, false)}
                           </span>
                         )}
-                        {showValueCol && <span className="parsed-var-value">{decodeForDisplay(modbusValues[name], info)}</span>}
+                        {showValueCol && (
+                          <span className="parsed-var-value-wrap">
+                            {(info.dataType || '').toLowerCase() === 'boolean' && (
+                              <span className={`boolean-dot boolean-dot--${modbusValues[name] ? '1' : '0'}`} title={modbusValues[name] ? '1' : '0'} aria-hidden />
+                            )}
+                            <span className="parsed-var-value">{decodeForDisplay(modbusValues[name], info)}</span>
+                          </span>
+                        )}
                         {(showMetaBit || showMetaType || showMetaDesc) && (
                           <div
                             className="parsed-var-meta-cols"
@@ -864,7 +876,12 @@ function App() {
                       <span className="parsed-var-name">변수명</span>
                       {showBitsCol && <span className="parsed-var-bits">2진수</span>}
                       {showHexCol && <span className="parsed-var-hex">16진수</span>}
-                      {showValueCol && <span className="parsed-var-value">값</span>}
+                      {showValueCol && (
+                        <span className="parsed-var-value-wrap">
+                          <span className="boolean-dot-header-spacer" aria-hidden />
+                          <span className="parsed-var-value">값</span>
+                        </span>
+                      )}
                       {(showMetaBit || showMetaType || showMetaDesc) && (
                         <div
                           className="parsed-var-meta-cols"
@@ -907,7 +924,14 @@ function App() {
                             {formatParsedValueAsHex(parsedValues[name], info.length, getParseOptionsFromMode(parsedEndianMode).littleEndian)}
                           </span>
                         )}
-                        {showValueCol && <span className="parsed-var-value">{decodeForDisplay(parsedValues[name], info)}</span>}
+                        {showValueCol && (
+                          <span className="parsed-var-value-wrap">
+                            {(info.dataType || '').toLowerCase() === 'boolean' && (
+                              <span className={`boolean-dot boolean-dot--${parsedValues[name] ? '1' : '0'}`} title={parsedValues[name] ? '1' : '0'} aria-hidden />
+                            )}
+                            <span className="parsed-var-value">{decodeForDisplay(parsedValues[name], info)}</span>
+                          </span>
+                        )}
                         {(showMetaBit || showMetaType || showMetaDesc) && (
                           <div
                             className="parsed-var-meta-cols"

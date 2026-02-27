@@ -1,5 +1,5 @@
 """
-Modbus TCP 폴링: 경고등/알람 107개는 Coils 1분 간격, 나머지 데이터는 Holding Registers 1초 간격.
+Modbus TCP 폴링: Boolean(경고등/알람 Coils) 3초 간격, 타발수 등 데이터(Holding Registers) 1초 간격.
 io_variables.json 순서대로 Coil 0~106, Holding 0~N 매핑.
 """
 import json
@@ -14,8 +14,8 @@ IO_VARIABLES_PATH = REPO_ROOT / "io_variables.json"
 # 경고등/알람 구간 Boolean 개수 (Coils)
 ALARM_COIL_COUNT = 107
 
-# 폴링 간격 (초)
-ALARM_POLL_INTERVAL = 60
+# 폴링 간격 (초): Boolean(Coil) 3초, 데이터(레지스터) 1초
+ALARM_POLL_INTERVAL = 3
 DATA_POLL_INTERVAL = 1
 
 

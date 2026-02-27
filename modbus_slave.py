@@ -126,9 +126,9 @@ def build_register_values(reg_rows):
     return values
 
 
-# 시뮬레이션: 경고등 랜덤 점등, 카운터/생산량/타발/가동은 전부 +1 쌓였다가 상한 넘으면 복귀
-COIL_FLASH_INTERVAL = 2.5
-COIL_FLASH_DURATION = 1.0
+# 시뮬레이션: 경고등 자주 랜덤 점등, 카운터/생산량/타발/가동은 전부 +1 쌓였다가 상한 넘으면 복귀
+COIL_FLASH_INTERVAL = 0.6
+COIL_FLASH_DURATION = 0.4
 REG_PULSE_INTERVAL = 0.5
 REG_PULSE_CAP = 150
 

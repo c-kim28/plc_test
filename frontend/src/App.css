@@ -290,6 +290,33 @@
   font-variant-numeric: tabular-nums;
 }
 
+.parsed-var-value-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.boolean-dot-header-spacer {
+  width: 8px;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.boolean-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+.boolean-dot--0 {
+  background: #22c55e;
+}
+.boolean-dot--1 {
+  background: #ef4444;
+}
+
 .parsed-var-value {
   color: var(--accent);
   font-weight: 500;
