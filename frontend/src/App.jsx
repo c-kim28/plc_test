@@ -549,7 +549,7 @@ function App() {
       <header className="header">
         <div className="logo">
           <span className="logo-icon">◉</span>
-          <h1>PLC UDP Monitor</h1>
+          <h1>PLC(UDP), Modbus/TCP, MQTT(IOLink)</h1>
         </div>
         <div className={`status-badge ${serverConnected ? 'online' : 'offline'}`}>
           {serverConnected ? '서버 연결됨' : '서버 연결 끊김'}
@@ -872,60 +872,78 @@ function App() {
 
           {activeView === 'dashboard' && (
             <section className="parsed-view dashboard-view">
-              <div className="parsed-view-header">
-                <div className="parsed-view-title-row">
-                  <h2>센서 대시보드 (MQTT)</h2>
-                  <span className={`mqtt-status ${mqttConnected ? 'connected' : 'disconnected'}`}>
-                    {mqttConnected ? 'MQTT 연결됨' : 'MQTT 미연결'}
-                  </span>
-                </div>
-                {mqttError && <p className="error-message">{mqttError}</p>}
-                <p className="parsed-view-hint">192.168.1.101:1883 — VVB001(진동), TP3237(온도) 실시간 수신</p>
+              <div className="dashboard-header">
+                <h2>센서 대시보드</h2>
+                <span className={`mqtt-status ${mqttConnected ? 'connected' : 'disconnected'}`}>
+                  {mqttConnected ? 'MQTT 연결됨' : 'MQTT 미연결'}
+                </span>
+                {mqttError && <p className="dashboard-error">{mqttError}</p>}
               </div>
-              <div className="dashboard-cards">
-                <div className="sensor-card">
-                  <div className="sensor-card-title">VVB001 · 진동</div>
-                  <div className="sensor-card-value sensor-card-value-multi">
+              <div className="dashboard-grid">
+                <div className="sensor-panel sensor-panel-vibration">
+                  <div className="sensor-panel-head">
+                    <span className="sensor-panel-label">VVB001</span>
+                    <span className="sensor-panel-desc">진동 센서</span>
+                  </div>
+                  <div className="sensor-panel-body">
                     {(() => {
                       const v = sensorData.VVB001?.value
-                      if (!v || typeof v !== 'object') return '—'
-                      const num = (x) => (x == null ? '—' : Number.isFinite(Number(x)) ? Number(x) : String(x))
+                      if (!v || typeof v !== 'object') {
+                        return <div className="sensor-panel-empty">데이터 대기 중</div>
+                      }
+                      const num = (x) => (x == null ? '—' : (Number.isFinite(Number(x)) ? Number(x) : String(x)))
+                      const rows = [
+                        { label: 'v-rms', value: num(v.v_rms), unit: '' },
+                        { label: 'a-peak', value: num(v.a_peak), unit: '' },
+                        { label: 'a-rms', value: num(v.a_rms), unit: '' },
+                        { label: '온도', value: num(v.temperature), unit: '°C' },
+                        { label: 'crest', value: num(v.crest), unit: '' },
+                      ]
                       return (
-                        <>
-                          <div>v-rms: {num(v.v_rms)}</div>
-                          <div>a-peak: {num(v.a_peak)}</div>
-                          <div>a-rms: {num(v.a_rms)}</div>
-                          <div>온도: {num(v.temperature)}</div>
-                          <div>crest: {num(v.crest)}</div>
-                        </>
+                        <dl className="sensor-rows">
+                          {rows.map(({ label, value, unit }) => (
+                            <div key={label} className="sensor-row">
+                              <dt>{label}</dt>
+                              <dd><span className="sensor-num">{value}</span>{unit && <span className="sensor-unit">{unit}</span>}</dd>
+                            </div>
+                          ))}
+                        </dl>
                       )
                     })()}
                   </div>
                   {sensorData.VVB001?.ts && (
-                    <div className="sensor-card-ts">
+                    <div className="sensor-panel-footer">
                       {new Date(sensorData.VVB001.ts * 1000).toLocaleTimeString('ko-KR')}
                     </div>
                   )}
                 </div>
-                <div className="sensor-card">
-                  <div className="sensor-card-title">TP3237 · 온도</div>
-                  <div className="sensor-card-value">
+                <div className="sensor-panel sensor-panel-temperature">
+                  <div className="sensor-panel-head">
+                    <span className="sensor-panel-label">TP3237</span>
+                    <span className="sensor-panel-desc">온도 센서</span>
+                  </div>
+                  <div className="sensor-panel-body sensor-panel-body-center">
                     {(() => {
                       const v = sensorData.TP3237?.value
-                      if (v == null) return '—'
+                      if (v == null) return <div className="sensor-panel-empty">데이터 대기 중</div>
+                      let disp = v
                       if (typeof v === 'object') {
                         const inner = v && typeof v.payload === 'object' ? v.payload : v
                         const cand = inner.data ?? inner.value ?? inner.temperature ?? inner.vibration
-                        if (cand != null && typeof cand !== 'object') return cand
-                        return JSON.stringify(v)
+                        disp = (cand != null && typeof cand !== 'object') ? cand : '—'
+                      } else if (Number.isFinite(Number(v))) {
+                        disp = Number(v)
                       }
-                      const n = Number(v)
-                      return Number.isFinite(n) ? n : String(v)
+                      return (
+                        <>
+                          <span className="sensor-temp-value">{disp}</span>
+                          <span className="sensor-temp-unit">°C</span>
+                        </>
+                      )
                     })()}
                   </div>
-                  <div className="sensor-card-unit">°C</div>
                   {sensorData.TP3237?.ts && (
-                    <div className="sensor-card-ts">
+                    <div className="sensor-panel-footer">
                       {new Date(sensorData.TP3237.ts * 1000).toLocaleTimeString('ko-KR')}
                     </div>
                   )}
