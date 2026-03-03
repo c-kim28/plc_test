@@ -301,15 +301,32 @@ function App() {
   const [modbusPollIntervals, setModbusPollIntervals] = useState({ boolean_ms: 500, data_ms: 500, string_ms: 5000 })
   const [modbusPollSettingsOpen, setModbusPollSettingsOpen] = useState(false)
   const [modbusPollEdit, setModbusPollEdit] = useState({ boolean_ms: 500, data_ms: 500, string_ms: 5000 })
+  const [modbusPollDisplay, setModbusPollDisplay] = useState({ boolean: '', data: '', string: '' }) // 입력란 문자열(비워두기 가능)
   const [modbusPollUnits, setModbusPollUnits] = useState({ boolean: 'ms', data: 'ms', string: 'ms' })
   const [modbusPollError, setModbusPollError] = useState('')
 
   const POLL_MIN_MS = 200
-  const POLL_MAX_MS = 1800000
-  const toDisplay = (ms, unit) => (unit === 's' ? ms / 1000 : ms)
-  const fromInput = (val, unit) => {
-    const n = unit === 's' ? Math.round(parseFloat(val) * 1000) : parseInt(val, 10)
-    return Math.min(POLL_MAX_MS, Math.max(POLL_MIN_MS, Number.isNaN(n) ? POLL_MIN_MS : n))
+  const POLL_MAX_MS = 1800000 // 30min
+  const toDisplay = (ms, unit) => {
+    if (unit === 'min') return ms / 60000
+    if (unit === 's') return ms / 1000
+    return ms
+  }
+  /** 입력 문자열을 ms로 파싱. 빈 값·잘못된 값이면 null */
+  const parseDisplayToMs = (val, unit) => {
+    const s = String(val).trim()
+    if (s === '') return null
+    let n
+    if (unit === 'min') n = Math.round(parseFloat(s) * 60000)
+    else if (unit === 's') n = Math.round(parseFloat(s) * 1000)
+    else n = parseInt(s, 10)
+    return Number.isNaN(n) ? null : n
+  }
+  /** 저장된 ms를 팝업에서 보기 좋게 표시할 단위로 변환 (1000ms→s, 60s→1min) */
+  const msToBestUnit = (ms) => {
+    if (ms >= 60000 && ms % 60000 === 0) return 'min'
+    if (ms >= 1000 && ms % 1000 === 0) return 's'
+    return 'ms'
   }
   const [sensorData, setSensorData] = useState({}) // { VVB001: { value, ts }, TP3237: { value, ts } }
   const [mqttConnected, setMqttConnected] = useState(false)
@@ -573,17 +590,38 @@ function App() {
 
   useEffect(() => {
     if (modbusPollSettingsOpen) {
+      const units = {
+        boolean: msToBestUnit(modbusPollIntervals.boolean_ms),
+        data: msToBestUnit(modbusPollIntervals.data_ms),
+        string: msToBestUnit(modbusPollIntervals.string_ms),
+      }
       setModbusPollEdit({ ...modbusPollIntervals })
+      setModbusPollUnits(units)
+      setModbusPollDisplay({
+        boolean: String(toDisplay(modbusPollIntervals.boolean_ms, units.boolean)),
+        data: String(toDisplay(modbusPollIntervals.data_ms, units.data)),
+        string: String(toDisplay(modbusPollIntervals.string_ms, units.string)),
+      })
       setModbusPollError('')
     }
   }, [modbusPollSettingsOpen])
 
-  const handleModbusPollIntervalsSave = async (boolean_ms, data_ms, string_ms) => {
-    const payload = {
-      boolean_ms: Math.min(POLL_MAX_MS, Math.max(POLL_MIN_MS, Number(boolean_ms) || 500)),
-      data_ms: Math.min(POLL_MAX_MS, Math.max(POLL_MIN_MS, Number(data_ms) || 500)),
-      string_ms: Math.min(POLL_MAX_MS, Math.max(POLL_MIN_MS, Number(string_ms) || 5000)),
+  const handleModbusPollIntervalsSave = async () => {
+    const boolean_ms = parseDisplayToMs(modbusPollDisplay.boolean, modbusPollUnits.boolean)
+    const data_ms = parseDisplayToMs(modbusPollDisplay.data, modbusPollUnits.data)
+    const string_ms = parseDisplayToMs(modbusPollDisplay.string, modbusPollUnits.string)
+
+    if (boolean_ms === null || data_ms === null || string_ms === null) {
+      setModbusPollError('모든 항목에 값을 입력해 주세요.')
+      return
     }
+    if (boolean_ms < POLL_MIN_MS || data_ms < POLL_MIN_MS || string_ms < POLL_MIN_MS ||
+        boolean_ms > POLL_MAX_MS || data_ms > POLL_MAX_MS || string_ms > POLL_MAX_MS) {
+      setModbusPollError('최소 200ms(0.2s) 이상, 최대 30분 이하로 입력해 주세요. 현재 값이 범위를 벗어나 저장되지 않습니다.')
+      return
+    }
+
+    const payload = { boolean_ms, data_ms, string_ms }
     try {
       const res = await fetch(`${API_URL}/api/modbus/poll-intervals`, {
         method: 'POST',
@@ -959,7 +997,7 @@ function App() {
                   <div className="modbus-poll-modal-overlay" onClick={() => setModbusPollSettingsOpen(false)}>
                     <div className="modbus-poll-modal" onClick={(e) => e.stopPropagation()}>
                       <h3>폴링 간격 설정</h3>
-                      <p className="modbus-poll-modal-desc">각 구간별 폴링 주기. 최소 200ms, 최대 30분. 단위는 각각 ms/s 드롭다운으로 선택.</p>
+                      <p className="modbus-poll-modal-desc">각 구간별 폴링 주기. 최소 200ms, 최대 30분. 단위는 ms/s/min 선택. 1000ms→1s, 60s→1min으로 자동 변환되어 표시됩니다.</p>
                       {modbusPollError && <p className="modbus-poll-modal-error">{modbusPollError}</p>}
                       <div className="modbus-poll-modal-fields">
                         <div className="field-group">
@@ -967,20 +1005,28 @@ function App() {
                           <span className="modbus-poll-input-wrap">
                             <input
                               type="number"
-                              min={modbusPollUnits.boolean === 's' ? 0.2 : 200}
-                              max={modbusPollUnits.boolean === 's' ? 1800 : 1800000}
-                              step={modbusPollUnits.boolean === 's' ? 0.1 : 100}
-                              value={toDisplay(modbusPollEdit.boolean_ms, modbusPollUnits.boolean)}
-                              onChange={(e) => setModbusPollEdit((p) => ({ ...p, boolean_ms: fromInput(e.target.value, modbusPollUnits.boolean) }))}
+                              min={modbusPollUnits.boolean === 'min' ? 0.01 : modbusPollUnits.boolean === 's' ? 0.2 : 200}
+                              max={modbusPollUnits.boolean === 'min' ? 30 : modbusPollUnits.boolean === 's' ? 1800 : 1800000}
+                              step={modbusPollUnits.boolean === 'min' ? 0.5 : modbusPollUnits.boolean === 's' ? 0.1 : 100}
+                              placeholder={modbusPollUnits.boolean === 'min' ? '0.5' : modbusPollUnits.boolean === 's' ? '1' : '500'}
+                              value={modbusPollDisplay.boolean}
+                              onChange={(e) => setModbusPollDisplay((p) => ({ ...p, boolean: e.target.value }))}
                             />
                             <select
                               className="modbus-poll-unit-select"
                               value={modbusPollUnits.boolean}
-                              onChange={(e) => setModbusPollUnits((u) => ({ ...u, boolean: e.target.value }))}
+                              onChange={(e) => {
+                                const newUnit = e.target.value
+                                const ms = parseDisplayToMs(modbusPollDisplay.boolean, modbusPollUnits.boolean) ?? modbusPollEdit.boolean_ms
+                                setModbusPollEdit((p) => ({ ...p, boolean_ms: ms }))
+                                setModbusPollDisplay((p) => ({ ...p, boolean: String(toDisplay(ms, newUnit)) }))
+                                setModbusPollUnits((u) => ({ ...u, boolean: newUnit }))
+                              }}
                               aria-label="Boolean 단위"
                             >
                               <option value="ms">ms</option>
                               <option value="s">s</option>
+                              <option value="min">min</option>
                             </select>
                           </span>
                         </div>
@@ -989,20 +1035,28 @@ function App() {
                           <span className="modbus-poll-input-wrap">
                             <input
                               type="number"
-                              min={modbusPollUnits.data === 's' ? 0.2 : 200}
-                              max={modbusPollUnits.data === 's' ? 1800 : 1800000}
-                              step={modbusPollUnits.data === 's' ? 0.1 : 100}
-                              value={toDisplay(modbusPollEdit.data_ms, modbusPollUnits.data)}
-                              onChange={(e) => setModbusPollEdit((p) => ({ ...p, data_ms: fromInput(e.target.value, modbusPollUnits.data) }))}
+                              min={modbusPollUnits.data === 'min' ? 0.01 : modbusPollUnits.data === 's' ? 0.2 : 200}
+                              max={modbusPollUnits.data === 'min' ? 30 : modbusPollUnits.data === 's' ? 1800 : 1800000}
+                              step={modbusPollUnits.data === 'min' ? 0.5 : modbusPollUnits.data === 's' ? 0.1 : 100}
+                              placeholder={modbusPollUnits.data === 'min' ? '0.5' : modbusPollUnits.data === 's' ? '1' : '500'}
+                              value={modbusPollDisplay.data}
+                              onChange={(e) => setModbusPollDisplay((p) => ({ ...p, data: e.target.value }))}
                             />
                             <select
                               className="modbus-poll-unit-select"
                               value={modbusPollUnits.data}
-                              onChange={(e) => setModbusPollUnits((u) => ({ ...u, data: e.target.value }))}
+                              onChange={(e) => {
+                                const newUnit = e.target.value
+                                const ms = parseDisplayToMs(modbusPollDisplay.data, modbusPollUnits.data) ?? modbusPollEdit.data_ms
+                                setModbusPollEdit((p) => ({ ...p, data_ms: ms }))
+                                setModbusPollDisplay((p) => ({ ...p, data: String(toDisplay(ms, newUnit)) }))
+                                setModbusPollUnits((u) => ({ ...u, data: newUnit }))
+                              }}
                               aria-label="데이터 단위"
                             >
                               <option value="ms">ms</option>
                               <option value="s">s</option>
+                              <option value="min">min</option>
                             </select>
                           </span>
                         </div>
@@ -1011,26 +1065,34 @@ function App() {
                           <span className="modbus-poll-input-wrap">
                             <input
                               type="number"
-                              min={modbusPollUnits.string === 's' ? 0.2 : 200}
-                              max={modbusPollUnits.string === 's' ? 1800 : 1800000}
-                              step={modbusPollUnits.string === 's' ? 0.1 : 100}
-                              value={toDisplay(modbusPollEdit.string_ms, modbusPollUnits.string)}
-                              onChange={(e) => setModbusPollEdit((p) => ({ ...p, string_ms: fromInput(e.target.value, modbusPollUnits.string) }))}
+                              min={modbusPollUnits.string === 'min' ? 0.01 : modbusPollUnits.string === 's' ? 0.2 : 200}
+                              max={modbusPollUnits.string === 'min' ? 30 : modbusPollUnits.string === 's' ? 1800 : 1800000}
+                              step={modbusPollUnits.string === 'min' ? 0.5 : modbusPollUnits.string === 's' ? 0.1 : 100}
+                              placeholder={modbusPollUnits.string === 'min' ? '0.5' : modbusPollUnits.string === 's' ? '5' : '5000'}
+                              value={modbusPollDisplay.string}
+                              onChange={(e) => setModbusPollDisplay((p) => ({ ...p, string: e.target.value }))}
                             />
                             <select
                               className="modbus-poll-unit-select"
                               value={modbusPollUnits.string}
-                              onChange={(e) => setModbusPollUnits((u) => ({ ...u, string: e.target.value }))}
+                              onChange={(e) => {
+                                const newUnit = e.target.value
+                                const ms = parseDisplayToMs(modbusPollDisplay.string, modbusPollUnits.string) ?? modbusPollEdit.string_ms
+                                setModbusPollEdit((p) => ({ ...p, string_ms: ms }))
+                                setModbusPollDisplay((p) => ({ ...p, string: String(toDisplay(ms, newUnit)) }))
+                                setModbusPollUnits((u) => ({ ...u, string: newUnit }))
+                              }}
                               aria-label="금형이름 단위"
                             >
                               <option value="ms">ms</option>
                               <option value="s">s</option>
+                              <option value="min">min</option>
                             </select>
                           </span>
                         </div>
                       </div>
                       <div className="modbus-poll-modal-actions">
-                        <button type="button" className="btn btn-primary" onClick={() => handleModbusPollIntervalsSave(modbusPollEdit.boolean_ms, modbusPollEdit.data_ms, modbusPollEdit.string_ms)}>
+                        <button type="button" className="btn btn-primary" onClick={handleModbusPollIntervalsSave}>
                           적용
                         </button>
                         <button type="button" className="btn" onClick={() => setModbusPollSettingsOpen(false)}>
