@@ -2,10 +2,11 @@
 """
 TOLE(True Order Little-Endian) UDP 테스트 송신기.
 
-io_variables.json의 변수별 길이(bit) 합만큼 UDP 패킷을 1초 간격으로 전송한다.
-정순 리틀엔디안용: Boolean 0/1, Word/Dword는 칼럼 설명에 맞춘 유의미한 더미값(LE 바이트순).
-String: 금형 이름은 하나의 문자열을 D1560, D1561, … 에 2바이트씩 분할 (예: hello → D1560=he, D1561=ll, D1562=o\\0), 16비트 워드 LE 스왑.
-수신 측: PLC UDP Monitor (포트 5212)
+리틀엔디안 전용: TOBE와 다른 바이트 순서로 전송. 파싱 탭에서 '리틀엔디안' 선택 시 해석.
+- Dword: 워드스왑 (하위워드 먼저, 상위워드 나중). 각 워드는 빅엔디안.
+  예: 값 0x01234567 → BE에서는 01 23 45 67, LE에서는 45 67 01 23 로 전송.
+- Word(16bit): 리틀엔디안 바이트. String: 16비트 워드 단위 바이트 스왑.
+수신: PLC UDP Monitor (포트 5212).
 """
 import json
 import socket
@@ -212,10 +213,12 @@ def main():
             full = group_full_strings.get(base, b"")
             chunk = full[off : off + chunk_len] if off < len(full) else bytes(chunk_len)
             base_offset[base] = off + chunk_len
-            raw = value_to_bytes(None, length_bits, data_type, big_endian=False, string_chunk=chunk)
-            raw = swap_16bit_word_bytes(raw)
+            # 문자열은 워드 스왑 없이 자연 순서로 전송 (hello → 68 65 6C 6C 6F 00)
+            raw = value_to_bytes(None, length_bits, data_type, big_endian=True, string_chunk=chunk)
         else:
-            raw = value_to_bytes(value, length_bits, data_type, big_endian=False)
+            # Dword 16bit 절반: 워드스왑만 (하위→상위 순서), 각 워드는 빅엔디안으로 전송 → 수신측 LE 파싱과 동일값
+            use_be = (data_type == "dword" and length_bits == 16)
+            raw = value_to_bytes(value, length_bits, data_type, big_endian=use_be)
         if data_type == "boolean" and length_bits == 1:
             bits.append(1 if value else 0)
         else:

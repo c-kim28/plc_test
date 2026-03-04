@@ -23,11 +23,10 @@ function parseRawByVariableList(rawHex, variableList, options = {}) {
   if (!variableList?.length || !rawHex) return {}
   const { orderReversed = false, littleEndian = false } = options
   const listToUse = orderReversed ? [...variableList].reverse() : variableList
-
+  // 항목: [name, lengthBit] 또는 [name, lengthBit, dataType]
+  const totalVarBits = listToUse.reduce((s, row) => s + (Number(row[1]) || 0), 0)
   const bytes = hexToBytes(rawHex)
   const totalBits = bytes.length * 8
-  const totalVarBits = listToUse.reduce((s, [, L]) => s + (Number(L) || 0), 0)
-  // 패딩 시: 정순(앞→뒤)이면 끝에 맞춤(맨 뒤 변수 = 스트림 맨 뒤), 역순(뒤→앞)이면 0부터(맨 앞 변수 = 스트림 맨 앞)
   let offset =
     totalBits > totalVarBits && !orderReversed
       ? totalBits - totalVarBits
@@ -36,11 +35,36 @@ function parseRawByVariableList(rawHex, variableList, options = {}) {
   const getBit = (i) => (bytes[i >> 3] >> (7 - (i % 8))) & 1
   const result = {}
 
-  for (const [name, lengthBit] of listToUse) {
+  for (let i = 0; i < listToUse.length; i++) {
+    const row = listToUse[i]
+    const name = row[0]
+    const lengthBit = row[1]
+    const dataType = (row[2] ?? '').toLowerCase()
     const len = Number(lengthBit) || 0
+    const nextRow = listToUse[i + 1]
+    const nextName = nextRow?.[0]
+    const nextLen = Number(nextRow?.[1]) || 0
+    const nextDt = (nextRow?.[2] ?? '').toLowerCase()
+    const isDwordLow = dataType === 'dword' && len === 16 && nextDt === 'dword' && nextLen === 16
+    const m = name.match(/^(.+)_D(\d+)$/)
+    const n = nextName && nextName.match(/^(.+)_D(\d+)$/)
+    const sameDwordPair = m && n && m[1] === n[1] && parseInt(n[2], 10) === parseInt(m[2], 10) + 1
+    const doWordSwap32 = littleEndian && isDwordLow && sameDwordPair && offset % 8 === 0 && offset + 32 <= totalBits
+
     if (len <= 0 || offset + len > totalBits) {
       result[name] = '-'
       if (len > 0) offset += len
+      continue
+    }
+    if (doWordSwap32) {
+      const start = offset >> 3
+      const lowWord = (((bytes[start] ?? 0) << 8) | (bytes[start + 1] ?? 0)) >>> 0
+      const highWord = (((bytes[start + 2] ?? 0) << 8) | (bytes[start + 3] ?? 0)) >>> 0
+      const val = ((highWord << 16) | lowWord) >>> 0
+      result[name] = val & 0xFFFF
+      result[nextName] = (val >> 16) & 0xFFFF
+      offset += 32
+      i++
       continue
     }
     if (len <= 32) {
@@ -51,16 +75,12 @@ function parseRawByVariableList(rawHex, variableList, options = {}) {
         if (len === 8) {
           val = bytes[start] ?? 0
         } else if (len === 16 && start + 1 < bytes.length) {
-          if (littleEndian) val = ((bytes[start] ?? 0) | ((bytes[start + 1] ?? 0) << 8)) >>> 0
-          else val = (((bytes[start] ?? 0) << 8) | (bytes[start + 1] ?? 0)) >>> 0
+          val = (((bytes[start] ?? 0) << 8) | (bytes[start + 1] ?? 0)) >>> 0
         } else if (len === 32 && start + 3 < bytes.length) {
           if (littleEndian) {
-            val = (
-              (bytes[start] ?? 0) +
-              ((bytes[start + 1] ?? 0) << 8) +
-              ((bytes[start + 2] ?? 0) << 16) +
-              ((bytes[start + 3] ?? 0) * 0x1000000)
-            ) >>> 0
+            const lowWord = (((bytes[start] ?? 0) << 8) | (bytes[start + 1] ?? 0)) >>> 0
+            const highWord = (((bytes[start + 2] ?? 0) << 8) | (bytes[start + 3] ?? 0)) >>> 0
+            val = ((highWord << 16) | lowWord) >>> 0
           } else {
             val = (
               ((bytes[start] ?? 0) * 0x1000000) +
@@ -77,9 +97,7 @@ function parseRawByVariableList(rawHex, variableList, options = {}) {
       }
       result[name] = val
     } else {
-      // 문자열:
-      // - big-endian: 수신 순서 그대로 유지
-      // - little-endian: 16비트 워드 내 바이트 스왑(PLC 문자열 워드 해석)
+      // 문자열: 수신 순서 그대로 (TOLE은 자연 순서로 전송)
       const byteCount = Math.ceil(len / 8)
       const rawBytes = []
       for (let b = 0; b < byteCount; b++) {
@@ -89,15 +107,7 @@ function parseRawByVariableList(rawHex, variableList, options = {}) {
         for (let i = 0; i < 8; i++) byteVal = (byteVal << 1) | getBit(bitStart + i)
         rawBytes.push(byteVal)
       }
-      let ordered = rawBytes
-      if (littleEndian && rawBytes.length >= 2) {
-        ordered = []
-        for (let i = 0; i < rawBytes.length; i += 2) {
-          if (i + 1 < rawBytes.length) ordered.push(rawBytes[i + 1], rawBytes[i])
-          else ordered.push(rawBytes[i])
-        }
-      }
-      result[name] = ordered.map((v) => v.toString(16).padStart(2, '0')).join('') || '-'
+      result[name] = rawBytes.map((v) => v.toString(16).padStart(2, '0')).join('') || '-'
     }
     offset += len
   }
@@ -254,8 +264,9 @@ function buildDisplayVariableList(ioVariableList) {
   return result
 }
 
-/** 표시용 행의 값 (Modbus: 첫 키에 이미 결합값이 있음, UDP: 두 키를 하위|상위로 결합. String 병합: 여러 키의 hex/문자열 이어붙임) */
-function getDisplayValue(row, valueMap, source = 'modbus') {
+/** 표시용 행의 값 (Modbus: 첫 키에 이미 결합값이 있음, UDP: 두 키를 엔디안에 맞춰 결합. String 병합: 여러 키의 hex/문자열 이어붙임)
+ *  udpLittleEndian: UDP 파싱 시 리틀엔디안이었으면 true. BE면 와이어 [상위워드][하위워드] → keys[0]=상위, keys[1]=하위. LE면 [하위워드][상위워드] → keys[0]=하위, keys[1]=상위. */
+function getDisplayValue(row, valueMap, source = 'modbus', udpLittleEndian = false) {
   if (row.keys.length === 1) return valueMap[row.name]
   const dt = (row.info?.dataType ?? '').toLowerCase()
   // String 병합: 각 키 값(hex 또는 2바이트)을 이어붙여 한 문자열로
@@ -271,14 +282,16 @@ function getDisplayValue(row, valueMap, source = 'modbus') {
   }
   // Dword
   if (source === 'modbus') return valueMap[row.keys[0]]
-  const low = valueMap[row.keys[0]]
-  const high = valueMap[row.keys[1]]
-  const l = typeof low === 'number' ? low : parseInt(low, 10)
-  const h = typeof high === 'number' ? high : parseInt(high, 10)
-  if (Number.isNaN(l) && Number.isNaN(h)) return undefined
-  if (Number.isNaN(h)) return low
-  if (Number.isNaN(l)) return high
-  return ((h & 0xFFFF) << 16) | (l & 0xFFFF)
+  const a = valueMap[row.keys[0]]
+  const b = valueMap[row.keys[1]]
+  const va = typeof a === 'number' ? a : parseInt(a, 10)
+  const vb = typeof b === 'number' ? b : parseInt(b, 10)
+  if (Number.isNaN(va) && Number.isNaN(vb)) return undefined
+  if (Number.isNaN(vb)) return a
+  if (Number.isNaN(va)) return b
+  const high = udpLittleEndian ? vb : va
+  const low = udpLittleEndian ? va : vb
+  return ((high & 0xFFFF) << 16) | (low & 0xFFFF)
 }
 
 function App() {
@@ -352,6 +365,21 @@ function App() {
   /** Word/Dword: 음수(리셋)일 때 처음 본 값을 시작값으로 저장해 두고, 리셋 시 그 시작값으로 표시 */
   const decodeForDisplayWithReset = (raw, info, rowName) => {
     const dt = (info?.dataType ?? '').toLowerCase()
+    const len = Number(info?.length) || 32
+
+    // 과부족수량(D1814): 32비트 부호 있는 값 그대로 표시 (예: 0xFFFFFA24 → -1500)
+    if (rowName === 'defficiencyQuantity_D1814' && dt === 'dword') {
+      if (raw === '-' || raw === undefined || raw === null) return '-'
+      const num = typeof raw === 'number' ? raw : parseInt(raw, 10)
+      if (Number.isNaN(num)) return '-'
+      const u = toUnsigned(num, len)
+      const signed = (u >>> 0) | 0
+      const scaleStr = String(info?.scale ?? '1').trim()
+      const scaleNum = parseFloat(scaleStr) || 1
+      if (scaleNum === 0.1) return (signed * 0.1).toFixed(1)
+      return signed
+    }
+
     const isCounter = dt === 'word' || dt === 'dword'
     const num = typeof raw === 'number' ? raw : parseInt(raw, 10)
     if (isCounter && typeof raw === 'number' && num >= 0 && counterStartRef.current[rowName] === undefined) {
@@ -448,7 +476,7 @@ function App() {
       if (data.parsed && typeof data.parsed === 'object') {
         setParsedValues((prev) => ({ ...prev, ...data.parsed }))
       } else {
-        const listForParse = ioVariableListRef.current.map(([name, info]) => [name, info.length])
+        const listForParse = ioVariableListRef.current.map(([name, info]) => [name, info.length, info.dataType ?? ''])
         setParsedValues((prev) => ({
           ...prev,
           ...parseRawByVariableList(raw, listForParse, getParseOptionsFromMode(parsedEndianModeRef.current)),
@@ -1481,7 +1509,7 @@ function App() {
                       )}
                     </div>
                     {displayVariableList.map((row) => {
-                      const value = getDisplayValue(row, parsedValues, 'udp')
+                      const value = getDisplayValue(row, parsedValues, 'udp', getParseOptionsFromMode(parsedEndianMode).littleEndian)
                       const { name, info } = row
                       return (
                       <div

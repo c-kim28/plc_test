@@ -187,24 +187,37 @@ def main():
 
     bits = [0] * padding_bits
     dword_sample = []
-    for name, length_bits, data_type, scale, description in variables:
+    i = 0
+    while i < len(variables):
+        name, length_bits, data_type, scale, description = variables[i]
         value = get_meaningful_value(name, length_bits, data_type, scale, description)
+        next_row = variables[i + 1] if i + 1 < len(variables) else None
+        next_name, next_len, next_dt = (next_row[0], int(next_row[1]), (next_row[2] or "").strip().lower()) if next_row else (None, 0, "")
+        base, num = _dword_base_and_index(name)
+        next_base, next_num = _dword_base_and_index(next_name) if next_name else (None, None)
+        is_dword_low = data_type == "dword" and length_bits == 16 and next_dt == "dword" and next_len == 16
+        is_dword_pair = is_dword_low and base and next_base == base and next_num is not None and num is not None and next_num == num + 1
         if data_type == "dword" and length_bits == 16 and value is not None and len(dword_sample) < 6:
             dword_sample.append((name, value))
         if data_type == "string":
-            base = name.rsplit("_", 1)[0] if "_" in name else name
-            off = base_offset.get(base, 0)
+            base_s = name.rsplit("_", 1)[0] if "_" in name else name
+            off = base_offset.get(base_s, 0)
             chunk_len = length_bits // 8
-            full = group_full_strings.get(base, b"")
+            full = group_full_strings.get(base_s, b"")
             chunk = full[off : off + chunk_len] if off < len(full) else bytes(chunk_len)
-            base_offset[base] = off + chunk_len
+            base_offset[base_s] = off + chunk_len
             raw = value_to_bytes(None, length_bits, data_type, big_endian=True, string_chunk=chunk)
+        elif is_dword_pair:
+            full_val = MEANINGFUL_DWORD.get(base, 0) if base else 0
+            raw = value_to_bytes(full_val, 32, "dword", big_endian=True)
+            i += 1
         else:
             raw = value_to_bytes(value, length_bits, data_type, big_endian=True)
         if data_type == "boolean" and length_bits == 1:
             bits.append(1 if value else 0)
         else:
             bits.extend(bytes_to_bits_be(raw))
+        i += 1
     payload = bits_to_bytes(bits)
 
     if dword_sample:

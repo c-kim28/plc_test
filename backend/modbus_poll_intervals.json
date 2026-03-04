@@ -1,0 +1,6 @@
+{
+  "boolean_ms": 1000,
+  "data_ms": 1000,
+  "string_ms": 1800000,
+  "word_swap": false
+}
