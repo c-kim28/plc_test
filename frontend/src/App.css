@@ -299,8 +299,14 @@
 .parsed-var-value-wrap {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.35rem;
+  width: 100%;
   min-width: 0;
+}
+
+.parsed-var-value-wrap--string {
+  justify-content: flex-start;
 }
 
 .boolean-dot-header-spacer {
@@ -328,6 +334,15 @@
   font-weight: 500;
   min-width: 5ch;
   text-align: right;
+}
+
+.parsed-var-value--string {
+  min-width: 0;
+  max-width: 100%;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .parsed-var-meta-cols {

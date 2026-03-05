@@ -10,6 +10,11 @@ VENV_DIR="$BACKEND_DIR/venv"
 VENV_PYTHON="$VENV_DIR/bin/python"
 VITE_PORT="${VITE_PORT:-5173}"
 
+# --- 0) 기존 동일 앱 프로세스 정리 (코드 수정 후 재시작 반영) ---
+pkill -f "$BACKEND_DIR/launcher.py" 2>/dev/null || true
+pkill -f "node_modules/vite/bin/vite.js --port $VITE_PORT" 2>/dev/null || true
+sleep 0.4
+
 # --- 1) Python/venv 필수 (없으면 안내만) ---
 if ! command -v python3 &>/dev/null; then
   echo "오류: python3가 없습니다. Python 3.8+ 를 설치한 뒤 다시 실행하세요."

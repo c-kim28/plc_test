@@ -83,11 +83,14 @@ def run_poller(host, port, on_parsed, on_error, stop_event):
     폴링 스레드: plc_mcprotocol.read_mc_variables로 host:port에 3E 요청.
     가짜 응답 서버(plc_tcp_fake_response)가 응답하면 그 값을 대시보드에 전달.
     """
-    entries = get_mc_entries()
     last_bool = last_data = last_str = time.monotonic()
 
     def do_poll():
         try:
+            # mc_fake_values.json 수정분(Y14C 등)을 재시작 없이 반영
+            entries = get_mc_entries()
+            if not entries:
+                return
             parsed = read_mc_variables(host, port, entries)
             if parsed:
                 on_parsed(parsed)

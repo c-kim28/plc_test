@@ -1,0 +1,939 @@
+{
+  "_comment": "가짜 3E 응답용 값. name은 io_variables.json 변수명과 맞추면 MC 뷰에서 해당 행에 값이 표시됨.",
+  "Y14C": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "warningLightRed_Y14C"
+  },
+  "Y14D": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "warningLightYellow_Y14D"
+  },
+  "Y14E": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 1,
+    "name": "warningLightGreen_Y14E"
+  },
+  "Y14F": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "towerLampBuzzer_Y14F"
+  },
+  "Y107": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "warningLightRedCircleType_Y107"
+  },
+  "Y109": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "melodyPhone_Y109"
+  },
+  "M300": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "emergencyStopRF_M300"
+  },
+  "M301": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "emergencyStopLF_M301"
+  },
+  "M302": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "emergencyStopRR_M302"
+  },
+  "M303": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "emergencyStopLR_M303"
+  },
+  "M304": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "emergencyStopPortableRF_M304"
+  },
+  "M305": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "emergencyStopPortableLR_M305"
+  },
+  "M306": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "emergencyStopCrown_M306"
+  },
+  "M307": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "electricCamAlarm_M307"
+  },
+  "M308": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "cBRelayWeld_M308"
+  },
+  "M309": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "clutchValveError_M309"
+  },
+  "M310": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "brakeValveError_M310"
+  },
+  "M311": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "analogUnitError_M311"
+  },
+  "M312": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "slideAdjustDeviceError_M312"
+  },
+  "M313": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None1_M313"
+  },
+  "M314": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "mainInverterAlarm_M314"
+  },
+  "M315": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "brakeUnitAlarm_M315"
+  },
+  "M316": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "brakeResistorAlarm_M316"
+  },
+  "M317": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "slideAdjustMotorTrip_M317"
+  },
+  "M318": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "lubricationPumpMotorTrip_M318"
+  },
+  "M319": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None2_M319"
+  },
+  "M320": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 1,
+    "name": "None3_M320"
+  },
+  "M321": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None4_M321"
+  },
+  "M322": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None5_M322"
+  },
+  "M323": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None6_M323"
+  },
+  "M324": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None7_M324"
+  },
+  "M325": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None8_M325"
+  },
+  "M326": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None9_M326"
+  },
+  "M327": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "cBPumpMotorTrip_M327"
+  },
+  "M328": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "cBCoolingMotorTrip_M328"
+  },
+  "M329": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "safetyBlock_M329"
+  },
+  "M330": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "clutchAirAlarmHigh_M330"
+  },
+  "M331": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "balanceAirAlarmLow_M331"
+  },
+  "M332": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None10_M332"
+  },
+  "M333": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "clutchAirAlarmLow_M333"
+  },
+  "M334": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "pressOverload_M334"
+  },
+  "M335": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "airLineOilLevel_M335"
+  },
+  "M336": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None11_M336"
+  },
+  "M337": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None12_M337"
+  },
+  "M338": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "safetyLadder_M338"
+  },
+  "M339": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "overrun_M339"
+  },
+  "M340": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "lightCurtainFront_M340"
+  },
+  "M341": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "slideUpperEnd_M341"
+  },
+  "M342": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "slideLowerEnd_M342"
+  },
+  "M343": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None13_M343"
+  },
+  "M344": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None14_M344"
+  },
+  "M345": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "cBPumpStop_M345"
+  },
+  "M346": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "cBOilCoolerStop_M346"
+  },
+  "M347": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "cBOilLevel_M347"
+  },
+  "M348": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "cBLineFilter1_M348"
+  },
+  "M349": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "cBLineFilter2_M349"
+  },
+  "M350": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "cBOilPressure_M350"
+  },
+  "M351": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "brakeTempError_M351"
+  },
+  "M352": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None15_M352"
+  },
+  "M353": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "overloadMonitorAlarm_M353"
+  },
+  "M354": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None16_M354"
+  },
+  "M355": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None17_M355"
+  },
+  "M356": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None18_M356"
+  },
+  "M357": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None19_M357"
+  },
+  "M358": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None20_M358"
+  },
+  "M359": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "lightCurtainRear_M359"
+  },
+  "M360": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "automationAlarm_M360"
+  },
+  "M361": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None21_M361"
+  },
+  "M362": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None22_M362"
+  },
+  "M363": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None23_M363"
+  },
+  "M364": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None24_M364"
+  },
+  "M365": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "oLPAirExceed_M365"
+  },
+  "M366": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "flywheelBrakeForward_M366"
+  },
+  "M367": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None25_M367"
+  },
+  "M368": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None26_M368"
+  },
+  "M369": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None27_M369"
+  },
+  "M370": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "lubricationCirculationPumpTrip_M370"
+  },
+  "M371": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None28_M371"
+  },
+  "M372": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None29_M372"
+  },
+  "M373": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "rd1UnitError_M373"
+  },
+  "M374": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None30_M374"
+  },
+  "M375": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None31_M375"
+  },
+  "M376": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None32_M376"
+  },
+  "M377": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None33_M377"
+  },
+  "M378": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None34_M378"
+  },
+  "M379": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "rd2UnitError_M379"
+  },
+  "M380": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None35_M380"
+  },
+  "M381": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None36_M381"
+  },
+  "M382": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None37_M382"
+  },
+  "M383": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "dirtyZoneLubOilLevelOver_M383"
+  },
+  "M384": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "dirtyZoneLubOilLevelLow_M384"
+  },
+  "M385": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "dirtyZoneLubOilLevelEmpty_M385"
+  },
+  "M386": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "cleanZoneLubOilLevelLow_M386"
+  },
+  "M387": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "cleanZoneLubOilLevelEmpty_M387"
+  },
+  "M388": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "slideOilSupplyError_M388"
+  },
+  "M389": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "balanceOilSupplyError_M389"
+  },
+  "M390": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "crownLOilSupplyError_M390"
+  },
+  "M391": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "crownROilSupplyError_M391"
+  },
+  "M392": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None38_M392"
+  },
+  "M393": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None39_M393"
+  },
+  "M394": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None40_M394"
+  },
+  "M395": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None41_M395"
+  },
+  "M396": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "cleanLineOilFilter_M396"
+  },
+  "M397": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "dirtyLineOilFilter_M397"
+  },
+  "M398": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "None42_M398"
+  },
+  "M399": {
+    "dataType": "Boolean",
+    "length": 1,
+    "value": 0,
+    "name": "dAUnitError_M399"
+  },
+  "D140": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 255,
+    "name": "currentDieNumber_D140"
+  },
+  "D1560": {
+    "dataType": "String",
+    "length": 16,
+    "value": "SIDE PANEL LH",
+    "name": "currentDieName_D1560"
+  },
+  "D1561": {
+    "dataType": "String",
+    "length": 16,
+    "value": "",
+    "name": "currentDieName_D1561"
+  },
+  "D1562": {
+    "dataType": "String",
+    "length": 16,
+    "value": "",
+    "name": "currentDieName_D1562"
+  },
+  "D1563": {
+    "dataType": "String",
+    "length": 16,
+    "value": "",
+    "name": "currentDieName_D1563"
+  },
+  "D1564": {
+    "dataType": "String",
+    "length": 16,
+    "value": "",
+    "name": "currentDieName_D1564"
+  },
+  "D1565": {
+    "dataType": "String",
+    "length": 16,
+    "value": "",
+    "name": "currentDieName_D1565"
+  },
+  "D1566": {
+    "dataType": "String",
+    "length": 16,
+    "value": "",
+    "name": "currentDieName_D1566"
+  },
+  "D1567": {
+    "dataType": "String",
+    "length": 16,
+    "value": "",
+    "name": "currentDieName_D1567"
+  },
+  "D711": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 1425,
+    "name": "currentDieHeight_D711"
+  },
+  "D713": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 52,
+    "name": "currentBalanceAirPressure_D713"
+  },
+  "D510": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 312,
+    "name": "nextDieNumber_D510"
+  },
+  "D549": {
+    "dataType": "String",
+    "length": 16,
+    "value": "SIDE PANEL RH",
+    "name": "nextDieName_D549"
+  },
+  "D550": {
+    "dataType": "String",
+    "length": 16,
+    "value": "",
+    "name": "nextDieName_D550"
+  },
+  "D551": {
+    "dataType": "String",
+    "length": 16,
+    "value": "",
+    "name": "nextDieName_D551"
+  },
+  "D552": {
+    "dataType": "String",
+    "length": 16,
+    "value": "",
+    "name": "nextDieName_D552"
+  },
+  "D553": {
+    "dataType": "String",
+    "length": 16,
+    "value": "",
+    "name": "nextDieName_D553"
+  },
+  "D554": {
+    "dataType": "String",
+    "length": 16,
+    "value": "",
+    "name": "nextDieName_D554"
+  },
+  "D555": {
+    "dataType": "String",
+    "length": 16,
+    "value": "",
+    "name": "nextDieName_D555"
+  },
+  "D556": {
+    "dataType": "String",
+    "length": 16,
+    "value": "",
+    "name": "nextDieName_D556"
+  },
+  "D511": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 1398,
+    "name": "nextDieHeight_D511"
+  },
+  "D513": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 50,
+    "name": "nextBalanceAirPressure_D513"
+  },
+  "D100": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 186,
+    "name": "pressAngle_D100"
+  },
+  "D104": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 235,
+    "name": "cPMCyclePerMinute_D104"
+  },
+  "D126": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 241,
+    "name": "strokePerMinute_D126"
+  },
+  "D340": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 438,
+    "name": "crankShaftTempRightFront_D340"
+  },
+  "D341": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 432,
+    "name": "crankShaftTempLeftFront_D341"
+  },
+  "D342": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 446,
+    "name": "crankShaftTempRightRear_D342"
+  },
+  "D343": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 441,
+    "name": "crankShaftTempLeftRear_D343"
+  },
+  "D330": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 418,
+    "name": "conrodTempLeft_D330"
+  },
+  "D331": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 423,
+    "name": "conrodTempRight_D331"
+  },
+  "D20": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 42,
+    "name": "oilSupplyCountSlide_D20"
+  },
+  "D21": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 7,
+    "name": "oilSupplyCountBalanceCylinder_D21"
+  },
+  "D22": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 58,
+    "name": "oilSupplyCountCrownLeft_D22"
+  },
+  "D23": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 56,
+    "name": "oilSupplyCountCrownRight_D23"
+  },
+  "D1820": {
+    "dataType": "Dword",
+    "length": 1,
+    "value": 1845632,
+    "name": "totalCounter_D1820"
+  },
+  "D1821": {
+    "dataType": "Dword",
+    "length": 1,
+    "value": 1845632,
+    "name": "totalCounter_D1821"
+  },
+  "D1810": {
+    "dataType": "Dword",
+    "length": 1,
+    "value": 250000,
+    "name": "productionCounter_D1810"
+  },
+  "D1811": {
+    "dataType": "Dword",
+    "length": 1,
+    "value": 250000,
+    "name": "productionCounter_D1811"
+  },
+  "D1812": {
+    "dataType": "Dword",
+    "length": 1,
+    "value": 193420,
+    "name": "currentProduction_D1812"
+  },
+  "D1813": {
+    "dataType": "Dword",
+    "length": 1,
+    "value": 193420,
+    "name": "currentProduction_D1813"
+  },
+  "D1814": {
+    "dataType": "Dword",
+    "length": 1,
+    "value": 56580,
+    "name": "defficiencyQuantity_D1814"
+  },
+  "D1815": {
+    "dataType": "Dword",
+    "length": 1,
+    "value": 56580,
+    "name": "defficiencyQuantity_D1815"
+  },
+  "D1816": {
+    "dataType": "Dword",
+    "length": 1,
+    "value": 35000,
+    "name": "presetCounter_D1816"
+  },
+  "D1817": {
+    "dataType": "Dword",
+    "length": 1,
+    "value": 35000,
+    "name": "presetCounter_D1817"
+  },
+  "D1818": {
+    "dataType": "Dword",
+    "length": 1,
+    "value": 193420,
+    "name": "production_D1818"
+  },
+  "D1819": {
+    "dataType": "Dword",
+    "length": 1,
+    "value": 193420,
+    "name": "production_D1819"
+  },
+  "D1912": {
+    "dataType": "Dword",
+    "length": 1,
+    "value": 12840,
+    "name": "todayStrokeCount_D1912"
+  },
+  "D1913": {
+    "dataType": "Dword",
+    "length": 1,
+    "value": 12840,
+    "name": "todayStrokeCount_D1913"
+  },
+  "D1914": {
+    "dataType": "Word",
+    "length": 1,
+    "value": 372,
+    "name": "todayRunningTime_D1914"
+  }
+}

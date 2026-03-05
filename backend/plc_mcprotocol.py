@@ -26,7 +26,11 @@ def parse_address(s: str) -> int:
 
 def device_to_headdevice(device: str, address: int) -> str:
     """(device, address) → pymcprotocol 헤드 디바이스 문자열."""
-    return f"{device.upper()}{address}"
+    d = device.upper()
+    # Mitsubishi Y는 주소를 16진 문자열로 넘겨야 한다. (예: 0x14C -> Y14C)
+    if d == "Y":
+        return f"{d}{address:X}"
+    return f"{d}{address}"
 
 
 def read_mc_variables(host: str, port: int, entries: list) -> dict:

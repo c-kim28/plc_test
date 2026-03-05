@@ -1,37 +1,26 @@
 #!/usr/bin/env python3
 """
 plc_tcp_send.py / plc_mcprotocol.py 가 보내는 3E 읽기 요청에 대해
-하드코딩된 응답 패킷을 돌려주는 TCP 서버.
+mc_fake_values.json에 정의된 값으로 응답 패킷을 돌려주는 TCP 서버.
 
-아래 4가지 요청만 구분해서 응답합니다. 값 바꾸려면 아래 상수만 수정하면 됨.
-  - D140   word 1개
-  - Y107   boolean 1비트
-  - D1810  dword 1개 (2워드)
-  - D1560  string 16바이트 (8워드)
-
-※ FAKE_* 상수 수정 후 반드시 이 서버를 재시작해야 새 값이 적용됩니다.
+JSON에서 키(예: M300, D140)와 value를 수정하면 요청 시마다 파일을 다시 읽어
+해당 값으로 응답합니다. 대시보드 폴링 시 JSON 값이 그대로 표시됩니다.
 
 사용법:
-  1) 이 서버 실행: python3 backend/plc_tcp_fake_response.py
-  2) 클라이언트는 PLC 대신 이 PC IP + 5002 로 연결해서 요청
-     예: python3 backend/plc_tcp_send.py --host 127.0.0.1 --device D --address 140 --type word --length 1
+  1) mc_fake_values.json에 디바이스+주소 키와 value 추가/수정 (예: "M300": {"dataType":"Boolean","length":1,"value":1})
+  2) 이 서버 실행: python3 backend/plc_tcp_fake_response.py
+  3) 클라이언트는 PLC 대신 이 PC IP + 5002 로 연결
 """
+import json
 import socket
 import sys
+from pathlib import Path
 
-# --------------- 여기만 수정해서 응답 값 바꿀 수 있음 ---------------
-# D140 word 1개 (1워드 = 2바이트, 빅엔디안). 예: 255 → 0x00FF
-FAKE_D140_WORD = 255
+SCRIPT_DIR = Path(__file__).resolve().parent
+MC_FAKE_VALUES_PATH = SCRIPT_DIR / "mc_fake_values.json"
 
-# Y107 boolean 1비트. 0 또는 1 (1워드로 전송, 하위 비트만 사용)
-FAKE_Y107_BIT = 1
-
-# D1810 dword 1개 (하위워드, 상위워드 순서, 각 워드 빅엔디안). 예: 12345678
-FAKE_D1810_DWORD = 12345678
-
-# D1560 string 16바이트 (ASCII, 8워드). 16자 미만이면 공백으로 채움
-FAKE_D1560_STRING = "Cathy Daebak"
-# ---------------------------------------------------------------
+# 3E 디바이스 코드 (plc_tcp_send / modbus_tcp_read와 동일)
+DEVICE_CODE_TO_LETTER = {0xA8: "D", 0x9D: "Y", 0x90: "M"}
 
 LISTEN_HOST = "0.0.0.0"
 LISTEN_PORT = 5002
@@ -85,43 +74,95 @@ def build_3e_response(read_data: bytes) -> bytes:
     return header + END_CODE_OK + read_data
 
 
+def load_mc_fake_values() -> dict:
+    """mc_fake_values.json 로드. 키로 '_' 시작하는 항목 제외."""
+    if not MC_FAKE_VALUES_PATH.exists():
+        return {}
+    try:
+        with open(MC_FAKE_VALUES_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return {k: v for k, v in data.items() if isinstance(v, dict) and not k.startswith("_")}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def build_read_data_from_entry(entry: dict) -> bytes:
+    """entry(dataType, length, value) → pymcprotocol이 기대하는 read_data 바이트."""
+    t = (entry.get("dataType") or "").strip().lower()
+    length = int(entry.get("length") or 1)
+    val = entry.get("value")
+    if t == "boolean":
+        bit = 1 if val else 0
+        return bytes([0x10 if bit else 0x00, 0x00])
+    if t == "word":
+        return word_to_le_bytes(int(val) if val is not None else 0)
+    if t == "dword":
+        return dword_to_read_data_le(int(val) if val is not None else 0)
+    if t == "string":
+        s = str(val) if val is not None else ""
+        return string_to_read_data(s, length)
+    return word_to_le_bytes(int(val) if val is not None else 0)
+
+
 # 요청 구분: 바디 = timer(2) + cmd(2) + subcmd(2) + ...
 # 0401: + addr3(3) + device(1) + points(2)  → 12바이트
 # 0403: + word_size(1) + dword_size(1) + devicedata 4바이트씩
-def match_request(body: bytes) -> str | None:
-    if len(body) < 8:
-        return None
-    cmd = body[2] | (body[3] << 8)
-    if cmd == 0x0401:
-        if len(body) < 12:
-            return None
-        addr = body[6] | (body[7] << 8) | (body[8] << 16)
-        device = body[9]
-        points = body[10] | (body[11] << 8)
-        if device == 0xA8 and addr == 0x8C and points == 1:
-            return "D140_word"
-        if device == 0x9D and (addr == 0x6B or addr == 0x107) and points == 1:
-            return "Y107_bool"
-        if device == 0xA8 and addr == 0x712 and points == 2:
-            return "D1810_dword"
-        if device == 0xA8 and addr == 0x618 and points == 8:
-            return "D1560_string"
-    elif cmd == 0x0403 and len(body) >= 12:
-        word_size, dword_size = body[6], body[7]
-        if word_size == 0 and dword_size == 1 and body[8] == 0x12 and body[9] == 0x07 and body[10] == 0 and body[11] == 0xA8:
-            return "D1810_dword_random"
+def _addr_to_config_key(letter: str, addr: int, config: dict) -> str | None:
+    """(device_letter, 3E주소) → config 키. Y/M은 0x01XX(상위바이트 1, 하위 2바이트=번호) 인코딩 사용."""
+    # 기본 후보: 10진/16진 표기 모두 허용 (예: Y332, Y14C)
+    direct_candidates = (
+        f"{letter}{addr}",
+        f"{letter}{addr:X}",
+    )
+    for c in direct_candidates:
+        if c in config:
+            return c
+
+    # Y/M: 0x0107 → Y107, 0x0109 → Y109 (상위 1바이트=1, 하위=십진 번호처럼 07→7, 09→9 → 1*100+7=107)
+    if letter in ("Y", "M") and (addr & 0xFF00) == 0x0100:
+        normalized = (addr >> 8) * 100 + (addr & 0xFF)
+        for c in (f"{letter}{normalized}", f"{letter}{normalized:X}"):
+            if c in config:
+                return c
+    if letter in ("Y", "M") and addr >= 0x100:
+        legacy = addr - 0x100
+        for c in (f"{letter}{legacy}", f"{letter}{legacy:X}"):
+            if c in config:
+                return c
     return None
 
 
-# kind → read_data 바이트 (pymcprotocol이 기대하는 형식: LE, 비트패킹)
-# batchread_bitunits: 비트 0 = 첫 바이트의 bit4 → 1이면 0x10
-FAKE_RESPONSES = {
-    "D140_word": lambda: word_to_le_bytes(FAKE_D140_WORD),
-    "Y107_bool": lambda: bytes([0x10 if FAKE_Y107_BIT else 0x00, 0x00]),
-    "D1810_dword": lambda: dword_to_read_data_le(FAKE_D1810_DWORD),
-    "D1810_dword_random": lambda: dword_to_read_data_le(FAKE_D1810_DWORD),
-    "D1560_string": lambda: string_to_read_data(FAKE_D1560_STRING, 16),
-}
+def match_request(body: bytes, config: dict) -> str | None:
+    """요청 바디를 파싱해 config에 있는 키(예: D140, M300)를 반환. 없으면 None."""
+    if len(body) < 8:
+        return None
+    cmd = body[2] | (body[3] << 8)
+    if cmd == 0x0401 and len(body) >= 12:
+        addr = body[6] | (body[7] << 8) | (body[8] << 16)
+        device = body[9]
+        letter = DEVICE_CODE_TO_LETTER.get(device)
+        if letter is not None:
+            key = _addr_to_config_key(letter, addr, config)
+            if key is not None:
+                return key
+    elif cmd == 0x0403 and len(body) >= 12:
+        word_size, dword_size = body[6], body[7]
+        total_devices = word_size + dword_size
+        expected_len = 8 + total_devices * 4
+        if total_devices > 0 and len(body) >= expected_len:
+            # devicedata 4바이트: addr(3) + device(1)
+            # 먼저 word 목록, 다음 dword 목록 순서.
+            offset = 8
+            for _ in range(total_devices):
+                addr = body[offset] | (body[offset + 1] << 8) | (body[offset + 2] << 16)
+                device = body[offset + 3]
+                letter = DEVICE_CODE_TO_LETTER.get(device)
+                if letter is not None:
+                    key = _addr_to_config_key(letter, addr, config)
+                    if key is not None:
+                        return key
+                offset += 4
+    return None
 
 REQUEST_BODY_LEN = 12
 MIN_REQUEST_LEN = RESPONSE_HEADER_LEN + REQUEST_BODY_LEN  # 21
@@ -138,9 +179,10 @@ def handle_client(conn: socket.socket):
     if len(body) < 12:
         print(f"  → 바디 부족: {len(body)} bytes, hex={body.hex()}")
         return
-    kind = match_request(body)
-    if kind and kind in FAKE_RESPONSES:
-        read_data = FAKE_RESPONSES[kind]()
+    config = load_mc_fake_values()
+    kind = match_request(body, config)
+    if kind and kind in config:
+        read_data = build_read_data_from_entry(config[kind])
     else:
         read_data = word_to_le_bytes(0)
         if kind is None:
@@ -163,9 +205,11 @@ def main():
         print(f"오류: 바인드 실패 {LISTEN_HOST}:{LISTEN_PORT} - {e}", file=sys.stderr)
         sys.exit(1)
     server.listen(5)
+    config = load_mc_fake_values()
+    keys = ", ".join(sorted(config.keys())) if config else "(없음)"
     print(f"3E 가짜 응답 서버 대기 중: {LISTEN_HOST}:{LISTEN_PORT}")
-    print(f"  현재 FAKE_Y107_BIT={FAKE_Y107_BIT}, FAKE_D140_WORD={FAKE_D140_WORD}")
-    print("  D140 word, Y107 boolean, D1810 dword, D1560 string  요청만 응답")
+    print(f"  설정: {MC_FAKE_VALUES_PATH}")
+    print(f"  항목: {keys}")
     while True:
         conn, addr = server.accept()
         print(f"연결: {addr}")

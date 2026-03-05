@@ -1166,7 +1166,7 @@ function App() {
                           'minmax(180px, 1.2fr)',
                           showBitsCol && 'minmax(160px, 2.5fr)',
                           showHexCol && 'minmax(120px, 2fr)',
-                          showValueCol && '90px',
+                          showValueCol && 'minmax(220px, 1.3fr)',
                           (showMetaBit || showMetaType || showMetaDesc) && 'minmax(340px, 1.5fr)'
                         ].filter(Boolean).join(' ')
                       }}
@@ -1200,6 +1200,8 @@ function App() {
                     {mcDisplayList.map((row) => {
                       const value = getDisplayValue(row, mcValues, 'modbus')
                       const { name, info } = row
+                      const displayValue = decodeForDisplayWithReset(value, info, name)
+                      const isStringType = (info?.dataType ?? '').toLowerCase() === 'string'
                       return (
                       <div
                         key={name}
@@ -1209,7 +1211,7 @@ function App() {
                             'minmax(180px, 1.2fr)',
                             showBitsCol && 'minmax(160px, 2.5fr)',
                             showHexCol && 'minmax(120px, 2fr)',
-                            showValueCol && '90px',
+                            showValueCol && 'minmax(220px, 1.3fr)',
                             (showMetaBit || showMetaType || showMetaDesc) && 'minmax(340px, 1.5fr)'
                           ].filter(Boolean).join(' ')
                         }}
@@ -1226,11 +1228,13 @@ function App() {
                           </span>
                         )}
                         {showValueCol && (
-                          <span className="parsed-var-value-wrap">
+                          <span className={`parsed-var-value-wrap ${isStringType ? 'parsed-var-value-wrap--string' : ''}`}>
                             {(info.dataType || '').toLowerCase() === 'boolean' && (
                               <span className={`boolean-dot boolean-dot--${value ? '1' : '0'}`} title={value ? '1' : '0'} aria-hidden />
                             )}
-                            <span className="parsed-var-value">{decodeForDisplayWithReset(value, info, name)}</span>
+                            <span className={`parsed-var-value ${isStringType ? 'parsed-var-value--string' : ''}`}>
+                              {displayValue}
+                            </span>
                           </span>
                         )}
                         {(showMetaBit || showMetaType || showMetaDesc) && (
@@ -1393,7 +1397,7 @@ function App() {
                           'minmax(180px, 1.2fr)',
                           showBitsCol && 'minmax(160px, 2.5fr)',
                           showHexCol && 'minmax(120px, 2fr)',
-                          showValueCol && '90px',
+                          showValueCol && 'minmax(220px, 1.3fr)',
                           (showMetaBit || showMetaType || showMetaDesc) && 'minmax(340px, 1.5fr)'
                         ].filter(Boolean).join(' ')
                       }}
@@ -1427,6 +1431,8 @@ function App() {
                     {displayVariableList.map((row) => {
                       const value = getDisplayValue(row, parsedValues, 'udp', getParseOptionsFromMode(parsedEndianMode).littleEndian)
                       const { name, info } = row
+                      const displayValue = decodeForDisplayWithReset(value, info, name)
+                      const isStringType = (info?.dataType ?? '').toLowerCase() === 'string'
                       return (
                       <div
                         key={name}
@@ -1436,7 +1442,7 @@ function App() {
                             'minmax(180px, 1.2fr)',
                             showBitsCol && 'minmax(160px, 2.5fr)',
                             showHexCol && 'minmax(120px, 2fr)',
-                            showValueCol && '90px',
+                            showValueCol && 'minmax(220px, 1.3fr)',
                             (showMetaBit || showMetaType || showMetaDesc) && 'minmax(340px, 1.5fr)'
                           ].filter(Boolean).join(' ')
                         }}
@@ -1453,11 +1459,13 @@ function App() {
                           </span>
                         )}
                         {showValueCol && (
-                          <span className="parsed-var-value-wrap">
+                          <span className={`parsed-var-value-wrap ${isStringType ? 'parsed-var-value-wrap--string' : ''}`}>
                             {(info.dataType || '').toLowerCase() === 'boolean' && (
                               <span className={`boolean-dot boolean-dot--${value ? '1' : '0'}`} title={value ? '1' : '0'} aria-hidden />
                             )}
-                            <span className="parsed-var-value">{decodeForDisplayWithReset(value, info, name)}</span>
+                            <span className={`parsed-var-value ${isStringType ? 'parsed-var-value--string' : ''}`}>
+                              {displayValue}
+                            </span>
                           </span>
                         )}
                         {(showMetaBit || showMetaType || showMetaDesc) && (

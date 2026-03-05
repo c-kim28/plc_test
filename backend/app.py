@@ -2,8 +2,10 @@ import json
 import os
 import queue
 import socket
+import subprocess
 import sys
 import threading
+import atexit
 from flask import Flask, Response, request, send_from_directory
 
 from flask_cors import CORS
@@ -29,11 +31,53 @@ udp_state = None  # {"ip": str, "port": int} when connected
 mc_thread = None
 mc_stop_event = None
 mc_state = None  # {"host": str, "port": int} when connected (slave 없음)
+mc_fake_server_proc = None
 
 # MQTT 센서 (VVB001 진동, TP3237 온도) - 마지막 수신값 (새 SSE 클라이언트용)
 last_sensor_data = {}  # {"VVB001": {"value": ..., "ts": ...}, "TP3237": {...}}
 # MQTT 연결 상태 (에러는 앱 기동 직후 발생 시 SSE 클라이언트 없어서 안 보임 → 스냅샷으로 전달)
 mqtt_status = {"connected": False, "error": ""}  # 새로 접속 시 화면에 표시용
+
+
+def _is_tcp_open(host: str, port: int, timeout_sec: float = 0.4) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout_sec):
+            return True
+    except OSError:
+        return False
+
+
+def _ensure_local_mc_fake_server(host: str, port: int):
+    """127.0.0.1:5002 대상일 때 fake 3E 서버가 없으면 자동 실행."""
+    global mc_fake_server_proc
+    if host not in ("127.0.0.1", "localhost") or port != 5002:
+        return
+    if _is_tcp_open(host, port):
+        return
+    if mc_fake_server_proc and mc_fake_server_proc.poll() is None:
+        return
+    fake_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plc_tcp_fake_response.py")
+    try:
+        mc_fake_server_proc = subprocess.Popen(
+            [sys.executable, fake_script],
+            cwd=os.path.dirname(fake_script),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception:
+        mc_fake_server_proc = None
+
+
+@atexit.register
+def _cleanup_mc_fake_server():
+    global mc_fake_server_proc
+    if mc_fake_server_proc and mc_fake_server_proc.poll() is None:
+        try:
+            mc_fake_server_proc.terminate()
+        except Exception:
+            pass
 
 
 def broadcast(event: str, data: dict):
@@ -212,6 +256,8 @@ def mc_connect():
 
     if mc_thread and mc_thread.is_alive():
         return {"error": "이미 MC 프로토콜 폴링이 실행 중입니다."}, 400
+
+    _ensure_local_mc_fake_server(host, port)
 
     try:
         from mc_poller import run_poller
