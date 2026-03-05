@@ -25,10 +25,10 @@ udp_thread = None
 listening = False
 udp_state = None  # {"ip": str, "port": int} when connected
 
-# Modbus TCP
-modbus_thread = None
-modbus_stop_event = None
-modbus_state = None  # {"host": str, "port": int, "slave_id": int} when connected
+# MC Protocol (3E)
+mc_thread = None
+mc_stop_event = None
+mc_state = None  # {"host": str, "port": int} when connected (slave 없음)
 
 # MQTT 센서 (VVB001 진동, TP3237 온도) - 마지막 수신값 (새 SSE 클라이언트용)
 last_sensor_data = {}  # {"VVB001": {"value": ..., "ts": ...}, "TP3237": {...}}
@@ -134,9 +134,9 @@ def events():
                 client_queue.put_nowait({"event": "udp_connected", "data": udp_state})
             except queue.Full:
                 pass
-        if modbus_state:
+        if mc_state:
             try:
-                client_queue.put_nowait({"event": "modbus_connected", "data": modbus_state})
+                client_queue.put_nowait({"event": "mc_connected", "data": mc_state})
             except queue.Full:
                 pass
         if last_sensor_data:
@@ -189,98 +189,93 @@ def health():
     return {"status": "ok"}
 
 
-def _modbus_on_parsed(parsed):
-    broadcast("modbus_data", {"parsed": parsed})
+def _mc_on_parsed(parsed):
+    broadcast("mc_data", {"parsed": parsed})
 
 
-def _modbus_on_error(message):
-    broadcast("modbus_error", {"message": message})
+def _mc_on_error(message):
+    broadcast("mc_error", {"message": message})
 
 
-@app.route("/api/modbus/connect", methods=["POST", "OPTIONS"])
-def modbus_connect():
+@app.route("/api/mc/connect", methods=["POST", "OPTIONS"])
+def mc_connect():
     if request.method == "OPTIONS":
         return "", 204
 
-    global modbus_thread, modbus_stop_event, modbus_state
+    global mc_thread, mc_stop_event, mc_state
     try:
         data = request.get_json(silent=True) or {}
         host = (data.get("host") or "127.0.0.1").strip()
-        port = int(data.get("port", 502))
-        slave_id = int(data.get("slave_id", 1))
-        poll_group = (data.get("poll_group") or "").strip() or None  # None 또는 'Y'|'M'|'D'|'X'
-        if poll_group and poll_group.upper() not in ("Y", "M", "D", "X"):
-            poll_group = None
+        port = int(data.get("port", 5002))
     except (TypeError, ValueError) as e:
         return {"error": f"잘못된 요청: {e}"}, 400
 
-    if modbus_thread and modbus_thread.is_alive():
-        return {"error": "이미 Modbus TCP에 연결 중입니다."}, 400
+    if mc_thread and mc_thread.is_alive():
+        return {"error": "이미 MC 프로토콜 폴링이 실행 중입니다."}, 400
 
     try:
-        from modbus_poller import run_poller
+        from mc_poller import run_poller
     except ImportError:
-        import os
-        import sys
         _backend_dir = os.path.dirname(os.path.abspath(__file__))
         if _backend_dir not in sys.path:
             sys.path.insert(0, _backend_dir)
         try:
-            from modbus_poller import run_poller
+            from mc_poller import run_poller
         except ImportError:
-            return {"error": "modbus_poller를 불러올 수 없습니다."}, 500
+            return {"error": "mc_poller를 불러올 수 없습니다."}, 500
 
     try:
-        modbus_stop_event = threading.Event()
-        modbus_thread = threading.Thread(
+        mc_stop_event = threading.Event()
+        mc_thread = threading.Thread(
             target=run_poller,
-            args=(host, port, slave_id, _modbus_on_parsed, _modbus_on_error, modbus_stop_event, poll_group),
+            args=(host, port, _mc_on_parsed, _mc_on_error, mc_stop_event),
             daemon=True,
         )
-        modbus_thread.start()
-        modbus_state = {"host": host, "port": port, "slave_id": slave_id, "poll_group": poll_group}
-        broadcast("modbus_connected", modbus_state)
+        mc_thread.start()
+        mc_state = {"host": host, "port": port}
+        broadcast("mc_connected", mc_state)
         return {"ok": True}
     except Exception as e:
         return {"error": str(e)}, 500
 
 
-@app.route("/api/modbus/disconnect", methods=["POST", "OPTIONS"])
-def modbus_disconnect():
+@app.route("/api/mc/disconnect", methods=["POST", "OPTIONS"])
+def mc_disconnect():
     if request.method == "OPTIONS":
         return "", 204
-    global modbus_thread, modbus_stop_event, modbus_state
-    if modbus_stop_event:
-        modbus_stop_event.set()
-    modbus_thread = None
-    modbus_stop_event = None
-    modbus_state = None
-    broadcast("modbus_disconnected", {})
+    global mc_thread, mc_stop_event, mc_state
+    if mc_stop_event:
+        mc_stop_event.set()
+    mc_thread = None
+    mc_stop_event = None
+    mc_state = None
+    broadcast("mc_disconnected", {})
     return {"ok": True}
 
 
-@app.route("/api/modbus/poll-intervals", methods=["GET", "POST", "OPTIONS"])
-def modbus_poll_intervals():
+@app.route("/api/mc/poll-intervals", methods=["GET", "POST", "OPTIONS"])
+def mc_poll_intervals():
     if request.method == "OPTIONS":
         return "", 204
     try:
-        from modbus_poller import get_poll_intervals, set_poll_intervals
+        from mc_poller import get_poll_intervals, set_poll_intervals
     except ImportError:
-        return {"error": "modbus_poller를 불러올 수 없습니다."}, 500
+        _backend_dir = os.path.dirname(os.path.abspath(__file__))
+        if _backend_dir not in sys.path:
+            sys.path.insert(0, _backend_dir)
+        try:
+            from mc_poller import get_poll_intervals, set_poll_intervals
+        except ImportError:
+            return {"error": "mc_poller를 불러올 수 없습니다."}, 500
     if request.method == "GET":
-        out = get_poll_intervals()
-        out.setdefault("word_swap", False)
-        return out
+        return get_poll_intervals()
     data = request.get_json(silent=True) or {}
     set_poll_intervals(
         boolean_ms=data.get("boolean_ms"),
         data_ms=data.get("data_ms"),
         string_ms=data.get("string_ms"),
-        word_swap=data.get("word_swap") if "word_swap" in data else None,
     )
-    out = get_poll_intervals()
-    out.setdefault("word_swap", False)
-    return out
+    return get_poll_intervals()
 
 
 # MQTT 구독 시작 (앱 로드 시 한 번만)

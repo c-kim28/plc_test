@@ -176,6 +176,9 @@ function decodeForDisplay(raw, info) {
   }
 
   if (dt === 'string') {
+    if (typeof raw === 'string' && !/^[0-9a-fA-F]*$/.test(raw)) {
+      return raw.replace(/\0+$/, '').trim() || '-'
+    }
     let hexStr = ''
     if (typeof raw === 'number' && len === 16) {
       hexStr = (raw >>> 0).toString(16).padStart(4, '0')
@@ -276,6 +279,7 @@ function getDisplayValue(row, valueMap, source = 'modbus', udpLittleEndian = fal
       const v = valueMap[k]
       if (v === undefined || v === null || v === '-') continue
       if (typeof v === 'string' && /^[0-9a-fA-F]*$/.test(v)) combined += v.replace(/\s/g, '')
+      else if (typeof v === 'string') combined += v
       else if (typeof v === 'number') combined += (v & 0xFFFF).toString(16).padStart(4, '0')
     }
     return combined || undefined
@@ -312,20 +316,17 @@ function App() {
   const [showMetaBit, setShowMetaBit] = useState(true)
   const [showMetaType, setShowMetaType] = useState(true)
   const [showMetaDesc, setShowMetaDesc] = useState(true)
-  const [modbusValues, setModbusValues] = useState({})
-  const [modbusConnected, setModbusConnected] = useState(false)
-  const [modbusError, setModbusError] = useState('')
-  const [modbusHost, setModbusHost] = useState('127.0.0.1')
-  const [modbusPort, setModbusPort] = useState('5051')
-  const [modbusSlaveId, setModbusSlaveId] = useState('0')
-  const [modbusPollIntervals, setModbusPollIntervals] = useState({ boolean_ms: 500, data_ms: 500, string_ms: 5000 })
-  const [modbusPollSettingsOpen, setModbusPollSettingsOpen] = useState(false)
-  const [modbusPollEdit, setModbusPollEdit] = useState({ boolean_ms: 500, data_ms: 500, string_ms: 5000 })
-  const [modbusPollDisplay, setModbusPollDisplay] = useState({ boolean: '', data: '', string: '' }) // 입력란 문자열(비워두기 가능)
-  const [modbusPollUnits, setModbusPollUnits] = useState({ boolean: 'ms', data: 'ms', string: 'ms' })
-  const [modbusPollError, setModbusPollError] = useState('')
-  const [modbusWordSwapMode, setModbusWordSwapMode] = useState('default') // 'default' = 상위→하위, 'swap' = 하위→상위
-  const [modbusPollGroup, setModbusPollGroup] = useState('all') // 'all' | 'Y' | 'D' | 'M' | 'X' — 폴링/표시 그룹
+  const [mcValues, setMcValues] = useState({})
+  const [mcConnected, setMcConnected] = useState(false)
+  const [mcError, setMcError] = useState('')
+  const [mcHost, setMcHost] = useState('127.0.0.1')
+  const [mcPort, setMcPort] = useState('5002')
+  const [mcPollIntervals, setMcPollIntervals] = useState({ boolean_ms: 1000, data_ms: 1000, string_ms: 1000 })
+  const [mcPollSettingsOpen, setMcPollSettingsOpen] = useState(false)
+  const [mcPollEdit, setMcPollEdit] = useState({ boolean_ms: 1000, data_ms: 1000, string_ms: 1000 })
+  const [mcPollDisplay, setMcPollDisplay] = useState({ boolean: '', data: '', string: '' })
+  const [mcPollUnits, setMcPollUnits] = useState({ boolean: 'ms', data: 'ms', string: 'ms' })
+  const [mcPollError, setMcPollError] = useState('')
 
   const POLL_MIN_MS = 200
   const POLL_MAX_MS = 1800000 // 30min
@@ -398,12 +399,8 @@ function App() {
     [ioVariableList]
   )
 
-  /** Modbus 뷰에서 그룹(Y/D/M/X)별로 필터한 목록. modbusPollGroup이 'all'이면 전체 */
-  const modbusDisplayList = useMemo(() => {
-    if (modbusPollGroup === 'all') return displayVariableList
-    const g = modbusPollGroup.toUpperCase()
-    return displayVariableList.filter((row) => getDeviceGroup(row.name) === g)
-  }, [displayVariableList, modbusPollGroup])
+  /** MC 프로토콜 뷰: 원래 전체 목록 표시. MC 폴링되는 4개만 값 있고 나머지는 - (나중에 실데이터 넣을 때 사용) */
+  const mcDisplayList = useMemo(() => displayVariableList, [displayVariableList])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -498,25 +495,25 @@ function App() {
       ])
     })
 
-    es.addEventListener('modbus_data', (e) => {
+    es.addEventListener('mc_data', (e) => {
       const data = JSON.parse(e.data || '{}')
       if (data.parsed && typeof data.parsed === 'object') {
-        setModbusValues((prev) => ({ ...prev, ...data.parsed }))
+        setMcValues((prev) => ({ ...prev, ...data.parsed }))
       }
     })
 
-    es.addEventListener('modbus_connected', () => {
-      setModbusConnected(true)
-      setModbusError('')
+    es.addEventListener('mc_connected', () => {
+      setMcConnected(true)
+      setMcError('')
     })
 
-    es.addEventListener('modbus_disconnected', () => {
-      setModbusConnected(false)
+    es.addEventListener('mc_disconnected', () => {
+      setMcConnected(false)
     })
 
-    es.addEventListener('modbus_error', (e) => {
+    es.addEventListener('mc_error', (e) => {
       const data = JSON.parse(e.data || '{}')
-      setModbusError(data.message || 'Modbus 오류')
+      setMcError(data.message || 'MC 프로토콜 오류')
     })
 
     es.addEventListener('sensor_data', (e) => {
@@ -585,153 +582,107 @@ function App() {
     }
   }
 
-  const handleModbusConnect = async () => {
-    setModbusError('')
+  const handleMcConnect = async () => {
+    setMcError('')
     try {
       const payload = {
-        host: modbusHost.trim(),
-        port: parseInt(modbusPort, 10) || 5051,
-        slave_id: (() => { const n = parseInt(modbusSlaveId, 10); return Number.isNaN(n) ? 0 : n; })(),
+        host: mcHost.trim(),
+        port: parseInt(mcPort, 10) || 5002,
       }
-      if (modbusPollGroup !== 'all') payload.poll_group = modbusPollGroup
-      const res = await fetch(`${API_URL}/api/modbus/connect`, {
+      const res = await fetch(`${API_URL}/api/mc/connect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
       const data = await res.json()
-      if (!res.ok) setModbusError(data.error || '연결 실패')
+      if (!res.ok) setMcError(data.error || '연결 실패')
     } catch (err) {
-      setModbusError('서버에 연결할 수 없습니다.')
+      setMcError('서버에 연결할 수 없습니다.')
     }
   }
 
-  const handleModbusDisconnect = async () => {
+  const handleMcDisconnect = async () => {
     try {
-      await fetch(`${API_URL}/api/modbus/disconnect`, { method: 'POST' })
+      await fetch(`${API_URL}/api/mc/disconnect`, { method: 'POST' })
     } catch {
       // ignore
     }
   }
 
-  // 그룹 탭 변경 시 이미 연결 중이면 선택한 그룹만 폴링하도록 재연결
-  const modbusPollGroupRef = useRef(modbusPollGroup)
-  useEffect(() => {
-    const prev = modbusPollGroupRef.current
-    modbusPollGroupRef.current = modbusPollGroup
-    if (prev === modbusPollGroup || !modbusConnected) return
-    let cancelled = false
-    ;(async () => {
-      try {
-        await fetch(`${API_URL}/api/modbus/disconnect`, { method: 'POST' })
-        if (cancelled) return
-        const payload = {
-          host: modbusHost.trim(),
-          port: parseInt(modbusPort, 10) || 5051,
-          slave_id: (() => { const n = parseInt(modbusSlaveId, 10); return Number.isNaN(n) ? 0 : n; })(),
-        }
-        if (modbusPollGroup !== 'all') payload.poll_group = modbusPollGroup
-        await fetch(`${API_URL}/api/modbus/connect`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-      } catch {
-        // ignore
-      }
-    })()
-    return () => { cancelled = true }
-  }, [modbusPollGroup, modbusConnected, modbusHost, modbusPort, modbusSlaveId])
-
-  const fetchModbusPollIntervals = async () => {
+  const fetchMcPollIntervals = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/modbus/poll-intervals`)
+      const res = await fetch(`${API_URL}/api/mc/poll-intervals`)
       if (res.ok) {
         const data = await res.json()
-        setModbusPollIntervals({
-          boolean_ms: Number(data.boolean_ms) || 500,
-          data_ms: Number(data.data_ms) || 500,
-          string_ms: Number(data.string_ms) || 5000,
+        setMcPollIntervals({
+          boolean_ms: Number(data.boolean_ms) || 1000,
+          data_ms: Number(data.data_ms) || 1000,
+          string_ms: Number(data.string_ms) || 1000,
         })
-        setModbusWordSwapMode(data.word_swap ? 'swap' : 'default')
       }
     } catch {
       // ignore
     }
   }
 
-  const handleModbusWordSwapChange = async (e) => {
-    const value = e.target.value
-    setModbusWordSwapMode(value)
-    try {
-      await fetch(`${API_URL}/api/modbus/poll-intervals`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ word_swap: value === 'swap' }),
-      })
-    } catch {
-      // 복원하지 않고 유지 (다음 탭 진입 시 서버 값으로 덮어짐)
-    }
-  }
-
   useEffect(() => {
-    if (activeView === 'modbus') fetchModbusPollIntervals()
+    if (activeView === 'mc') fetchMcPollIntervals()
   }, [activeView])
 
   useEffect(() => {
-    if (modbusPollSettingsOpen) {
+    if (mcPollSettingsOpen) {
       const units = {
-        boolean: msToBestUnit(modbusPollIntervals.boolean_ms),
-        data: msToBestUnit(modbusPollIntervals.data_ms),
-        string: msToBestUnit(modbusPollIntervals.string_ms),
+        boolean: msToBestUnit(mcPollIntervals.boolean_ms),
+        data: msToBestUnit(mcPollIntervals.data_ms),
+        string: msToBestUnit(mcPollIntervals.string_ms),
       }
-      setModbusPollEdit({ ...modbusPollIntervals })
-      setModbusPollUnits(units)
-      setModbusPollDisplay({
-        boolean: String(toDisplay(modbusPollIntervals.boolean_ms, units.boolean)),
-        data: String(toDisplay(modbusPollIntervals.data_ms, units.data)),
-        string: String(toDisplay(modbusPollIntervals.string_ms, units.string)),
+      setMcPollEdit({ ...mcPollIntervals })
+      setMcPollUnits(units)
+      setMcPollDisplay({
+        boolean: String(toDisplay(mcPollIntervals.boolean_ms, units.boolean)),
+        data: String(toDisplay(mcPollIntervals.data_ms, units.data)),
+        string: String(toDisplay(mcPollIntervals.string_ms, units.string)),
       })
-      setModbusPollError('')
+      setMcPollError('')
     }
-  }, [modbusPollSettingsOpen])
+  }, [mcPollSettingsOpen])
 
-  const handleModbusPollIntervalsSave = async () => {
-    const boolean_ms = parseDisplayToMs(modbusPollDisplay.boolean, modbusPollUnits.boolean)
-    const data_ms = parseDisplayToMs(modbusPollDisplay.data, modbusPollUnits.data)
-    const string_ms = parseDisplayToMs(modbusPollDisplay.string, modbusPollUnits.string)
+  const handleMcPollIntervalsSave = async () => {
+    const boolean_ms = parseDisplayToMs(mcPollDisplay.boolean, mcPollUnits.boolean)
+    const data_ms = parseDisplayToMs(mcPollDisplay.data, mcPollUnits.data)
+    const string_ms = parseDisplayToMs(mcPollDisplay.string, mcPollUnits.string)
 
     if (boolean_ms === null || data_ms === null || string_ms === null) {
-      setModbusPollError('모든 항목에 값을 입력해 주세요.')
+      setMcPollError('모든 항목에 값을 입력해 주세요.')
       return
     }
     if (boolean_ms < POLL_MIN_MS || data_ms < POLL_MIN_MS || string_ms < POLL_MIN_MS ||
         boolean_ms > POLL_MAX_MS || data_ms > POLL_MAX_MS || string_ms > POLL_MAX_MS) {
-      setModbusPollError('최소 200ms(0.2s) 이상, 최대 30분 이하로 입력해 주세요. 현재 값이 범위를 벗어나 저장되지 않습니다.')
+      setMcPollError('최소 200ms(0.2s) 이상, 최대 30분 이하로 입력해 주세요. 현재 값이 범위를 벗어나 저장되지 않습니다.')
       return
     }
 
     const payload = { boolean_ms, data_ms, string_ms }
     try {
-      const res = await fetch(`${API_URL}/api/modbus/poll-intervals`, {
+      const res = await fetch(`${API_URL}/api/mc/poll-intervals`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data && (typeof data.boolean_ms === 'number' || typeof data.boolean_ms === 'string')) {
-        setModbusPollIntervals({
-          boolean_ms: Number(data.boolean_ms) || 500,
-          data_ms: Number(data.data_ms) || 500,
-          string_ms: Number(data.string_ms) || 5000,
+        setMcPollIntervals({
+          boolean_ms: Number(data.boolean_ms) || 1000,
+          data_ms: Number(data.data_ms) || 1000,
+          string_ms: Number(data.string_ms) || 1000,
         })
-        setModbusPollSettingsOpen(false)
-        setModbusPollError('')
+        setMcPollSettingsOpen(false)
+        setMcPollError('')
       } else {
-        setModbusPollError(data?.error || '저장 실패. 백엔드를 재시작한 뒤 다시 시도하세요.')
+        setMcPollError(data?.error || '저장 실패. 백엔드를 재시작한 뒤 다시 시도하세요.')
       }
     } catch (err) {
-      setModbusPollError('서버에 연결할 수 없습니다. 백엔드(6005)가 켜져 있는지 확인하세요.')
+      setMcPollError('서버에 연결할 수 없습니다. 백엔드(6005)가 켜져 있는지 확인하세요.')
     }
   }
 
@@ -780,14 +731,14 @@ function App() {
   /** 바이트 하나를 8비트 문자열로 (MSB 먼저) */
   const byteToBits8 = (b) => ((b & 0xff).toString(2)).padStart(8, '0')
 
-  /** 파싱된 값을 리틀/빅엔디안에 맞춘 2진수로 표시. 값 없으면 빈 문자열, 숫자는 부호 없이 스트림 순서대로. */
+  /** 파싱된 값을 리틀/빅엔디안에 맞춘 2진수로 표시. 값 없으면 빈 문자열, 숫자는 부호 없이 스트림 순서대로. 문자열(ASCII)은 바이트별 2진. */
   const formatParsedValueAsBits = (value, lengthBit, dataType, littleEndian) => {
     const len = Number(lengthBit) || 0
-    if (len <= 0 || value === '-' || value === undefined) return ''
+    if (value === '-' || value === undefined) return ''
     const le = littleEndian ?? true
     let bits
     if (typeof value === 'number') {
-      if (len > 32) return ''
+      if (len <= 0 || len > 32) return ''
       const u = toUnsigned(value, len)
       if (len === 1) bits = String(u & 1)
       else if (len === 8) bits = byteToBits8(u)
@@ -813,7 +764,7 @@ function App() {
     } else if (typeof value === 'string' && /^[0-9a-fA-F]+$/.test(value)) {
       const bytes = hexToBytes(value)
       if (!bytes.length) return ''
-      const byteCount = Math.ceil(len / 8)
+      const byteCount = Math.ceil((len || bytes.length * 8) / 8)
       let ordered = bytes.slice(0, byteCount)
       if (le && byteCount >= 2) {
         ordered = []
@@ -822,24 +773,28 @@ function App() {
           else ordered.push(bytes[i])
         }
       }
-      bits = ordered.map((b) => byteToBits8(b)).join('').slice(0, len).padStart(len, '0')
+      bits = ordered.map((b) => byteToBits8(b)).join('').slice(0, len || 999).padStart(len || ordered.length * 8, '0')
+    } else if (typeof value === 'string') {
+      const bytes = Array.from(value).map((c) => c.charCodeAt(0) & 0xff)
+      if (!bytes.length) return ''
+      bits = bytes.map((b) => byteToBits8(b)).join(' ')
     } else {
       return ''
     }
-    return bits.replace(/(.{8})/g, '$1 ').trim()
+    return (typeof bits === 'string' && bits.includes(' ')) ? bits : bits.replace(/(.{8})/g, '$1 ').trim()
   }
 
-  /** 파싱된 값을 16진수 문자열로 표시 (해석된 값 기준 MSB→LSB) */
+  /** 파싱된 값을 16진수 문자열로 표시 (해석된 값 기준 MSB→LSB). 문자열(ASCII)은 바이트별 hex. */
   const formatParsedValueAsHex = (value, lengthBit, littleEndian) => {
     const len = Number(lengthBit) || 0
-    if (len <= 0 || value === '-' || value === undefined) return ''
+    if (value === '-' || value === undefined) return ''
     if (typeof value === 'number') {
+      if (len <= 0) return ''
       const u = toUnsigned(value, len)
       const byteCount = Math.ceil(len / 8)
       if (byteCount <= 0) return ''
       const bytes = []
       for (let i = 0; i < byteCount; i++) {
-        // 숫자 u에서 LSB부터 추출
         bytes.push((u >> (8 * i)) & 0xff)
       }
       const ordered = [...bytes].reverse()
@@ -849,6 +804,10 @@ function App() {
       const pairs = value.match(/.{1,2}/g) || []
       return pairs.join(' ').toUpperCase()
     }
+    if (typeof value === 'string') {
+      const bytes = Array.from(value).map((c) => c.charCodeAt(0) & 0xff)
+      return bytes.map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')
+    }
     return ''
   }
 
@@ -857,7 +816,7 @@ function App() {
       <header className="header">
         <div className="logo">
           <span className="logo-icon">◉</span>
-          <h1>PLC(UDP), Modbus/TCP, MQTT(IOLink)</h1>
+          <h1>PLC(UDP), MC Protocol(3E), MQTT(IOLink)</h1>
         </div>
         <div className={`status-badge ${serverConnected ? 'online' : 'offline'}`}>
           {serverConnected ? '서버 연결됨' : '서버 연결 끊김'}
@@ -884,11 +843,11 @@ function App() {
           </button>
           <button
             type="button"
-            className={`side-tab ${activeView === 'modbus' ? 'active' : ''}`}
-            onClick={() => setActiveView('modbus')}
+            className={`side-tab ${activeView === 'mc' ? 'active' : ''}`}
+            onClick={() => setActiveView('mc')}
           >
-            <span className="side-tab-label">Modbus</span>
-            <span className="side-tab-desc">Modbus TCP 폴링</span>
+            <span className="side-tab-label">MC Protocol</span>
+            <span className="side-tab-desc">MC 3E 폴링</span>
           </button>
           <button
             type="button"
@@ -999,28 +958,16 @@ function App() {
             </>
           )}
 
-          {activeView === 'modbus' && (
-            <section className="parsed-view modbus-view">
+          {activeView === 'mc' && (
+            <section className="parsed-view mc-view">
               <div className="parsed-view-header">
                 <div className="parsed-view-title-row">
-                  <h2>Modbus TCP</h2>
+                  <h2>MC Protocol (3E)</h2>
                   <div className="parsed-view-title-row-right">
-                    <label className="parsed-endian-select-wrap">
-                      <span className="parsed-endian-label">워드 순서</span>
-                      <select
-                        className="parsed-endian-select"
-                        value={modbusWordSwapMode}
-                        onChange={handleModbusWordSwapChange}
-                        aria-label="레지스터 워드 순서"
-                      >
-                        <option value="default">Default (상위→하위)</option>
-                        <option value="swap">Word Swap (하위→상위)</option>
-                      </select>
-                    </label>
                     <button
                       type="button"
                       className="modbus-poll-settings-btn"
-                      onClick={() => setModbusPollSettingsOpen(true)}
+                      onClick={() => setMcPollSettingsOpen(true)}
                       title="폴링 간격 설정"
                       aria-label="폴링 간격 설정"
                     >
@@ -1031,118 +978,87 @@ function App() {
                     </button>
                   </div>
                 </div>
-                <div className="modbus-group-row">
-                  <span className="modbus-group-label">폴링 그룹</span>
-                  <div className="modbus-group-tabs" role="tablist" aria-label="폴링 그룹">
-                    {['all', 'Y', 'D', 'M'].map((g) => (
-                      <button
-                        key={g}
-                        type="button"
-                        role="tab"
-                        aria-selected={modbusPollGroup === g}
-                        className={`modbus-group-tab ${modbusPollGroup === g ? 'active' : ''}`}
-                        onClick={() => setModbusPollGroup(g)}
-                      >
-                        {g === 'all' ? '전체' : g}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <section className="control-panel modbus-control">
+                <section className="control-panel mc-control">
                   <div className="control-row">
                     <div className="field-group">
-                      <label htmlFor="modbus-host">IP</label>
+                      <label htmlFor="mc-host">IP</label>
                       <input
-                        id="modbus-host"
+                        id="mc-host"
                         type="text"
-                        value={modbusHost}
-                        onChange={(e) => setModbusHost(e.target.value)}
+                        value={mcHost}
+                        onChange={(e) => setMcHost(e.target.value)}
                         placeholder="127.0.0.1"
-                        disabled={modbusConnected}
+                        disabled={mcConnected}
                       />
                     </div>
                     <div className="field-group">
-                      <label htmlFor="modbus-port">포트</label>
+                      <label htmlFor="mc-port">포트</label>
                       <input
-                        id="modbus-port"
+                        id="mc-port"
                         type="number"
-                        value={modbusPort}
-                        onChange={(e) => setModbusPort(e.target.value)}
-                        placeholder="502"
+                        value={mcPort}
+                        onChange={(e) => setMcPort(e.target.value)}
+                        placeholder="5002"
                         min="1"
                         max="65535"
-                        disabled={modbusConnected}
-                      />
-                    </div>
-                    <div className="field-group">
-                      <label htmlFor="modbus-slave">Slave ID</label>
-                      <input
-                        id="modbus-slave"
-                        type="number"
-                        value={modbusSlaveId}
-                        onChange={(e) => setModbusSlaveId(e.target.value)}
-                        placeholder="1"
-                        min="0"
-                        max="255"
-                        disabled={modbusConnected}
+                        disabled={mcConnected}
                       />
                     </div>
                   </div>
                   <div className="button-row">
                     <button
                       className="btn btn-primary"
-                      onClick={handleModbusConnect}
-                      disabled={modbusConnected}
+                      onClick={handleMcConnect}
+                      disabled={mcConnected}
                     >
-                      Modbus TCP 연결
+                      폴링 시작
                     </button>
                     <button
                       className="btn btn-danger"
-                      onClick={handleModbusDisconnect}
-                      disabled={!modbusConnected}
+                      onClick={handleMcDisconnect}
+                      disabled={!mcConnected}
                     >
                       연결 중지
                     </button>
                   </div>
-                  {modbusError && <p className="error-message">{modbusError}</p>}
-                  {modbusConnected && (
+                  {mcError && <p className="error-message">{mcError}</p>}
+                  {mcConnected && (
                     <p className="modbus-status">
-                      경고등/알람(Boolean) {modbusPollIntervals.boolean_ms}ms, 데이터 {modbusPollIntervals.data_ms}ms, 금형이름 {modbusPollIntervals.string_ms}ms 간격 폴링 중
-                      {modbusPollGroup !== 'all' && ` (${modbusPollGroup}만)`}
+                      Y107, D140, D1810, D1560 하드코딩 폴링 중 (Boolean {mcPollIntervals.boolean_ms}ms / 데이터 {mcPollIntervals.data_ms}ms / String {mcPollIntervals.string_ms}ms)
                     </p>
                   )}
                 </section>
                 <p className="parsed-view-hint">
-                  io_variables.json과 동일한 목록. Boolean(Coil) {modbusPollIntervals.boolean_ms}ms, 데이터(Holding 등) {modbusPollIntervals.data_ms}ms, 금형이름(String) {modbusPollIntervals.string_ms}ms 간격.
+                  MC 매핑 4개 변수만 표시. 현재는 하드코딩 응답으로 폴링됩니다.
                 </p>
-                {modbusPollSettingsOpen && (
-                  <div className="modbus-poll-modal-overlay" onClick={() => setModbusPollSettingsOpen(false)}>
+                {mcPollSettingsOpen && (
+                  <div className="modbus-poll-modal-overlay" onClick={() => setMcPollSettingsOpen(false)}>
                     <div className="modbus-poll-modal" onClick={(e) => e.stopPropagation()}>
                       <h3>폴링 간격 설정</h3>
                       <p className="modbus-poll-modal-desc">각 구간별 폴링 주기. 최소 200ms, 최대 30분. 단위는 ms/s/min 선택. 1000ms→1s, 60s→1min으로 자동 변환되어 표시됩니다.</p>
-                      {modbusPollError && <p className="modbus-poll-modal-error">{modbusPollError}</p>}
+                      {mcPollError && <p className="modbus-poll-modal-error">{mcPollError}</p>}
                       <div className="modbus-poll-modal-fields">
                         <div className="field-group">
                           <label>경고등/알람 (Boolean)</label>
                           <span className="modbus-poll-input-wrap">
                             <input
                               type="number"
-                              min={modbusPollUnits.boolean === 'min' ? 0.01 : modbusPollUnits.boolean === 's' ? 0.2 : 200}
-                              max={modbusPollUnits.boolean === 'min' ? 30 : modbusPollUnits.boolean === 's' ? 1800 : 1800000}
-                              step={modbusPollUnits.boolean === 'min' ? 0.5 : modbusPollUnits.boolean === 's' ? 0.1 : 100}
-                              placeholder={modbusPollUnits.boolean === 'min' ? '0.5' : modbusPollUnits.boolean === 's' ? '1' : '500'}
-                              value={modbusPollDisplay.boolean}
-                              onChange={(e) => setModbusPollDisplay((p) => ({ ...p, boolean: e.target.value }))}
+                              min={mcPollUnits.boolean === 'min' ? 0.01 : mcPollUnits.boolean === 's' ? 0.2 : 200}
+                              max={mcPollUnits.boolean === 'min' ? 30 : mcPollUnits.boolean === 's' ? 1800 : 1800000}
+                              step={mcPollUnits.boolean === 'min' ? 0.5 : mcPollUnits.boolean === 's' ? 0.1 : 100}
+                              placeholder={mcPollUnits.boolean === 'min' ? '0.5' : mcPollUnits.boolean === 's' ? '1' : '500'}
+                              value={mcPollDisplay.boolean}
+                              onChange={(e) => setMcPollDisplay((p) => ({ ...p, boolean: e.target.value }))}
                             />
                             <select
                               className="modbus-poll-unit-select"
-                              value={modbusPollUnits.boolean}
+                              value={mcPollUnits.boolean}
                               onChange={(e) => {
                                 const newUnit = e.target.value
-                                const ms = parseDisplayToMs(modbusPollDisplay.boolean, modbusPollUnits.boolean) ?? modbusPollEdit.boolean_ms
-                                setModbusPollEdit((p) => ({ ...p, boolean_ms: ms }))
-                                setModbusPollDisplay((p) => ({ ...p, boolean: String(toDisplay(ms, newUnit)) }))
-                                setModbusPollUnits((u) => ({ ...u, boolean: newUnit }))
+                                const ms = parseDisplayToMs(mcPollDisplay.boolean, mcPollUnits.boolean) ?? mcPollEdit.boolean_ms
+                                setMcPollEdit((p) => ({ ...p, boolean_ms: ms }))
+                                setMcPollDisplay((p) => ({ ...p, boolean: String(toDisplay(ms, newUnit)) }))
+                                setMcPollUnits((u) => ({ ...u, boolean: newUnit }))
                               }}
                               aria-label="Boolean 단위"
                             >
@@ -1157,22 +1073,22 @@ function App() {
                           <span className="modbus-poll-input-wrap">
                             <input
                               type="number"
-                              min={modbusPollUnits.data === 'min' ? 0.01 : modbusPollUnits.data === 's' ? 0.2 : 200}
-                              max={modbusPollUnits.data === 'min' ? 30 : modbusPollUnits.data === 's' ? 1800 : 1800000}
-                              step={modbusPollUnits.data === 'min' ? 0.5 : modbusPollUnits.data === 's' ? 0.1 : 100}
-                              placeholder={modbusPollUnits.data === 'min' ? '0.5' : modbusPollUnits.data === 's' ? '1' : '500'}
-                              value={modbusPollDisplay.data}
-                              onChange={(e) => setModbusPollDisplay((p) => ({ ...p, data: e.target.value }))}
+                              min={mcPollUnits.data === 'min' ? 0.01 : mcPollUnits.data === 's' ? 0.2 : 200}
+                              max={mcPollUnits.data === 'min' ? 30 : mcPollUnits.data === 's' ? 1800 : 1800000}
+                              step={mcPollUnits.data === 'min' ? 0.5 : mcPollUnits.data === 's' ? 0.1 : 100}
+                              placeholder={mcPollUnits.data === 'min' ? '0.5' : mcPollUnits.data === 's' ? '1' : '500'}
+                              value={mcPollDisplay.data}
+                              onChange={(e) => setMcPollDisplay((p) => ({ ...p, data: e.target.value }))}
                             />
                             <select
                               className="modbus-poll-unit-select"
-                              value={modbusPollUnits.data}
+                              value={mcPollUnits.data}
                               onChange={(e) => {
                                 const newUnit = e.target.value
-                                const ms = parseDisplayToMs(modbusPollDisplay.data, modbusPollUnits.data) ?? modbusPollEdit.data_ms
-                                setModbusPollEdit((p) => ({ ...p, data_ms: ms }))
-                                setModbusPollDisplay((p) => ({ ...p, data: String(toDisplay(ms, newUnit)) }))
-                                setModbusPollUnits((u) => ({ ...u, data: newUnit }))
+                                const ms = parseDisplayToMs(mcPollDisplay.data, mcPollUnits.data) ?? mcPollEdit.data_ms
+                                setMcPollEdit((p) => ({ ...p, data_ms: ms }))
+                                setMcPollDisplay((p) => ({ ...p, data: String(toDisplay(ms, newUnit)) }))
+                                setMcPollUnits((u) => ({ ...u, data: newUnit }))
                               }}
                               aria-label="데이터 단위"
                             >
@@ -1187,22 +1103,22 @@ function App() {
                           <span className="modbus-poll-input-wrap">
                             <input
                               type="number"
-                              min={modbusPollUnits.string === 'min' ? 0.01 : modbusPollUnits.string === 's' ? 0.2 : 200}
-                              max={modbusPollUnits.string === 'min' ? 30 : modbusPollUnits.string === 's' ? 1800 : 1800000}
-                              step={modbusPollUnits.string === 'min' ? 0.5 : modbusPollUnits.string === 's' ? 0.1 : 100}
-                              placeholder={modbusPollUnits.string === 'min' ? '0.5' : modbusPollUnits.string === 's' ? '5' : '5000'}
-                              value={modbusPollDisplay.string}
-                              onChange={(e) => setModbusPollDisplay((p) => ({ ...p, string: e.target.value }))}
+                              min={mcPollUnits.string === 'min' ? 0.01 : mcPollUnits.string === 's' ? 0.2 : 200}
+                              max={mcPollUnits.string === 'min' ? 30 : mcPollUnits.string === 's' ? 1800 : 1800000}
+                              step={mcPollUnits.string === 'min' ? 0.5 : mcPollUnits.string === 's' ? 0.1 : 100}
+                              placeholder={mcPollUnits.string === 'min' ? '0.5' : mcPollUnits.string === 's' ? '5' : '5000'}
+                              value={mcPollDisplay.string}
+                              onChange={(e) => setMcPollDisplay((p) => ({ ...p, string: e.target.value }))}
                             />
                             <select
                               className="modbus-poll-unit-select"
-                              value={modbusPollUnits.string}
+                              value={mcPollUnits.string}
                               onChange={(e) => {
                                 const newUnit = e.target.value
-                                const ms = parseDisplayToMs(modbusPollDisplay.string, modbusPollUnits.string) ?? modbusPollEdit.string_ms
-                                setModbusPollEdit((p) => ({ ...p, string_ms: ms }))
-                                setModbusPollDisplay((p) => ({ ...p, string: String(toDisplay(ms, newUnit)) }))
-                                setModbusPollUnits((u) => ({ ...u, string: newUnit }))
+                                const ms = parseDisplayToMs(mcPollDisplay.string, mcPollUnits.string) ?? mcPollEdit.string_ms
+                                setMcPollEdit((p) => ({ ...p, string_ms: ms }))
+                                setMcPollDisplay((p) => ({ ...p, string: String(toDisplay(ms, newUnit)) }))
+                                setMcPollUnits((u) => ({ ...u, string: newUnit }))
                               }}
                               aria-label="금형이름 단위"
                             >
@@ -1214,10 +1130,10 @@ function App() {
                         </div>
                       </div>
                       <div className="modbus-poll-modal-actions">
-                        <button type="button" className="btn btn-primary" onClick={handleModbusPollIntervalsSave}>
+                        <button type="button" className="btn btn-primary" onClick={handleMcPollIntervalsSave}>
                           적용
                         </button>
-                        <button type="button" className="btn" onClick={() => setModbusPollSettingsOpen(false)}>
+                        <button type="button" className="btn" onClick={() => setMcPollSettingsOpen(false)}>
                           취소
                         </button>
                       </div>
@@ -1237,9 +1153,9 @@ function App() {
                 </div>
               </div>
               <div className="parsed-view-body">
-                {modbusDisplayList.length === 0 ? (
+                {mcDisplayList.length === 0 ? (
                   <p className="parsed-view-empty">
-                    {displayVariableList.length === 0 ? 'io_variables.json을 불러오는 중…' : `선택한 그룹(${modbusPollGroup === 'all' ? '전체' : modbusPollGroup})에 해당하는 변수가 없습니다.`}
+                    {displayVariableList.length === 0 ? 'io_variables.json을 불러오는 중…' : '해당하는 변수가 없습니다.'}
                   </p>
                 ) : (
                   <div className="parsed-vars-grid">
@@ -1281,8 +1197,8 @@ function App() {
                         </div>
                       )}
                     </div>
-                    {modbusDisplayList.map((row) => {
-                      const value = getDisplayValue(row, modbusValues, 'modbus')
+                    {mcDisplayList.map((row) => {
+                      const value = getDisplayValue(row, mcValues, 'modbus')
                       const { name, info } = row
                       return (
                       <div

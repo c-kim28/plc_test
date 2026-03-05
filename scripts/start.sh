@@ -36,6 +36,10 @@ else
     "$VENV_DIR/bin/pip" install --quiet --upgrade pip
     "$VENV_DIR/bin/pip" install --quiet -r "$BACKEND_DIR/requirements.txt"
     echo "백엔드 설정 완료."
+  elif ! "$VENV_PYTHON" -c "import pymcprotocol" 2>/dev/null; then
+    echo "MC 프로토콜용 패키지(pymcprotocol) 설치 중..."
+    "$VENV_PYTHON" -m pip install --quiet -r "$BACKEND_DIR/requirements.txt"
+    echo "설치 완료."
   fi
 fi
 

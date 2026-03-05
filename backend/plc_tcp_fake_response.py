@@ -9,6 +9,8 @@ plc_tcp_send.py / plc_mcprotocol.py 가 보내는 3E 읽기 요청에 대해
   - D1810  dword 1개 (2워드)
   - D1560  string 16바이트 (8워드)
 
+※ FAKE_* 상수 수정 후 반드시 이 서버를 재시작해야 새 값이 적용됩니다.
+
 사용법:
   1) 이 서버 실행: python3 backend/plc_tcp_fake_response.py
   2) 클라이언트는 PLC 대신 이 PC IP + 5002 로 연결해서 요청
@@ -28,7 +30,7 @@ FAKE_Y107_BIT = 1
 FAKE_D1810_DWORD = 12345678
 
 # D1560 string 16바이트 (ASCII, 8워드). 16자 미만이면 공백으로 채움
-FAKE_D1560_STRING = "HELLO_PLC_TEST!!"
+FAKE_D1560_STRING = "Cathy Daebak"
 # ---------------------------------------------------------------
 
 LISTEN_HOST = "0.0.0.0"
@@ -38,22 +40,25 @@ END_CODE_LEN = 2
 END_CODE_OK = bytes([0x00, 0x00])
 
 
-def word_to_be_bytes(value: int) -> bytes:
-    """16비트 값을 2바이트 빅엔디안."""
+def word_to_le_bytes(value: int) -> bytes:
+    """16비트 값을 2바이트 리틀엔디안. pymcprotocol이 LE로 해석함."""
     v = value & 0xFFFF
-    return bytes([(v >> 8) & 0xFF, v & 0xFF])
+    return bytes([v & 0xFF, (v >> 8) & 0xFF])
 
 
-def dword_to_read_data(value: int) -> bytes:
-    """32비트 값을 2워드(4바이트) 빅엔디안. 하위워드 먼저."""
+def dword_to_read_data_le(value: int) -> bytes:
+    """32비트 값을 4바이트 리틀엔디안. pymcprotocol randomread/batchread_wordunits 해석에 맞춤."""
     value = value & 0xFFFFFFFF
-    low = value & 0xFFFF
-    high = (value >> 16) & 0xFFFF
-    return word_to_be_bytes(low) + word_to_be_bytes(high)
+    return bytes([
+        value & 0xFF,
+        (value >> 8) & 0xFF,
+        (value >> 16) & 0xFF,
+        (value >> 24) & 0xFF,
+    ])
 
 
 def string_to_read_data(s: str, length: int) -> bytes:
-    """문자열을 length 바이트로, 2바이트(1워드) 단위 빅엔디안처럼 배치. (PLC는 워드 단위 빅엔디안)"""
+    """문자열을 length 바이트로. 워드 단위로 보냄(현재 pymcprotocol string 해석과 맞음)."""
     b = s.encode("ascii", errors="replace")[:length]
     b = b + b"\x00" * (length - len(b))
     # 워드 단위로 빅엔디안: 각 2바이트는 [high, low]
@@ -80,25 +85,43 @@ def build_3e_response(read_data: bytes) -> bytes:
     return header + END_CODE_OK + read_data
 
 
-# 요청 구분: 바디 12바이트 = timer(2) + cmd(2) + subcmd(2) + addr3(3) + device(1) + points(2)
-# 인덱스: body[0:2]=timer, [2:4]=cmd, [4:6]=subcmd, [6:9]=addr3, [9]=device, [10:12]=points
-# D=0xA8, Y=0x9D. 주소 리틀엔디안 3바이트: 140→8C00 00, 107→6B00 00, 1810→12 07 00, 1560→18 06 00
+# 요청 구분: 바디 = timer(2) + cmd(2) + subcmd(2) + ...
+# 0401: + addr3(3) + device(1) + points(2)  → 12바이트
+# 0403: + word_size(1) + dword_size(1) + devicedata 4바이트씩
 def match_request(body: bytes) -> str | None:
-    if len(body) < 12:
+    if len(body) < 8:
         return None
-    addr = body[6] | (body[7] << 8) | (body[8] << 16)
-    device = body[9]
-    points = body[10] | (body[11] << 8)
-    if device == 0xA8 and addr == 0x8C and points == 1:
-        return "D140_word"
-    if device == 0x9D and addr == 0x6B and points == 1:
-        return "Y107_bool"
-    if device == 0xA8 and addr == 0x712 and points == 2:
-        return "D1810_dword"
-    if device == 0xA8 and addr == 0x618 and points == 8:
-        return "D1560_string"
+    cmd = body[2] | (body[3] << 8)
+    if cmd == 0x0401:
+        if len(body) < 12:
+            return None
+        addr = body[6] | (body[7] << 8) | (body[8] << 16)
+        device = body[9]
+        points = body[10] | (body[11] << 8)
+        if device == 0xA8 and addr == 0x8C and points == 1:
+            return "D140_word"
+        if device == 0x9D and (addr == 0x6B or addr == 0x107) and points == 1:
+            return "Y107_bool"
+        if device == 0xA8 and addr == 0x712 and points == 2:
+            return "D1810_dword"
+        if device == 0xA8 and addr == 0x618 and points == 8:
+            return "D1560_string"
+    elif cmd == 0x0403 and len(body) >= 12:
+        word_size, dword_size = body[6], body[7]
+        if word_size == 0 and dword_size == 1 and body[8] == 0x12 and body[9] == 0x07 and body[10] == 0 and body[11] == 0xA8:
+            return "D1810_dword_random"
     return None
 
+
+# kind → read_data 바이트 (pymcprotocol이 기대하는 형식: LE, 비트패킹)
+# batchread_bitunits: 비트 0 = 첫 바이트의 bit4 → 1이면 0x10
+FAKE_RESPONSES = {
+    "D140_word": lambda: word_to_le_bytes(FAKE_D140_WORD),
+    "Y107_bool": lambda: bytes([0x10 if FAKE_Y107_BIT else 0x00, 0x00]),
+    "D1810_dword": lambda: dword_to_read_data_le(FAKE_D1810_DWORD),
+    "D1810_dword_random": lambda: dword_to_read_data_le(FAKE_D1810_DWORD),
+    "D1560_string": lambda: string_to_read_data(FAKE_D1560_STRING, 16),
+}
 
 REQUEST_BODY_LEN = 12
 MIN_REQUEST_LEN = RESPONSE_HEADER_LEN + REQUEST_BODY_LEN  # 21
@@ -115,23 +138,20 @@ def handle_client(conn: socket.socket):
     if len(body) < 12:
         print(f"  → 바디 부족: {len(body)} bytes, hex={body.hex()}")
         return
-    addr = body[6] | (body[7] << 8) | (body[8] << 16)
-    device = body[9]
-    points = body[10] | (body[11] << 8)
     kind = match_request(body)
-    if kind == "D140_word":
-        read_data = word_to_be_bytes(FAKE_D140_WORD)
-    elif kind == "Y107_bool":
-        read_data = word_to_be_bytes(1 if FAKE_Y107_BIT else 0)
-    elif kind == "D1810_dword":
-        read_data = dword_to_read_data(FAKE_D1810_DWORD)
-    elif kind == "D1560_string":
-        read_data = string_to_read_data(FAKE_D1560_STRING, 16)
+    if kind and kind in FAKE_RESPONSES:
+        read_data = FAKE_RESPONSES[kind]()
     else:
-        read_data = word_to_be_bytes(0)
+        read_data = word_to_le_bytes(0)
+        if kind is None:
+            addr = body[6] | (body[7] << 8) | (body[8] << 16)
+            device = body[9]
+            points = body[10] | (body[11] << 8)
+            print(f"  → 미매칭: body(hex)={body.hex()}, addr=0x{addr:X} device=0x{device:X} points={points}")
     resp = build_3e_response(read_data)
     conn.sendall(resp)
-    print(f"  → addr=0x{addr:X} device=0x{device:X} points={points} → {kind or 'unknown'}, read_data={read_data.hex()}, 응답 {len(resp)} bytes")
+    if kind:
+        print(f"  → {kind}, read_data={read_data.hex()}, 응답 {len(resp)} bytes")
 
 
 def main():
@@ -144,6 +164,7 @@ def main():
         sys.exit(1)
     server.listen(5)
     print(f"3E 가짜 응답 서버 대기 중: {LISTEN_HOST}:{LISTEN_PORT}")
+    print(f"  현재 FAKE_Y107_BIT={FAKE_Y107_BIT}, FAKE_D140_WORD={FAKE_D140_WORD}")
     print("  D140 word, Y107 boolean, D1810 dword, D1560 string  요청만 응답")
     while True:
         conn, addr = server.accept()
