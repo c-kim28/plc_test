@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import './App.css'
+import PlcDashboard from './components/PlcDashboard'
 
 // 개발 모드: 접속한 호스트(로컬/원격)의 6005 사용 → SSH로 서버 IP 접속해도 API 연결됨
 const API_URL = import.meta.env.DEV ? `http://${window.location.hostname}:6005` : window.location.origin
@@ -173,7 +174,7 @@ function getDisplayValue(row, valueMap) {
 
 function App() {
   const [serverConnected, setServerConnected] = useState(false)
-  const [activeView, setActiveView] = useState('mc') // 'mc' | 'dashboard'
+  const [activeView, setActiveView] = useState('plc') // 'plc' | 'mc' | 'dashboard'
   const [ioVariableList, setIoVariableList] = useState([]) // [ [name, lengthBit], ... ]
   const [showBitsCol, setShowBitsCol] = useState(true)
   const [showHexCol, setShowHexCol] = useState(true)
@@ -447,6 +448,14 @@ function App() {
         <nav className="side-tabs" aria-label="화면 전환">
           <button
             type="button"
+            className={`side-tab ${activeView === 'plc' ? 'active' : ''}`}
+            onClick={() => setActiveView('plc')}
+          >
+            <span className="side-tab-label">PLC 대시보드</span>
+            <span className="side-tab-desc">고속프레스 메인</span>
+          </button>
+          <button
+            type="button"
             className={`side-tab ${activeView === 'mc' ? 'active' : ''}`}
             onClick={() => setActiveView('mc')}
           >
@@ -464,6 +473,14 @@ function App() {
         </nav>
 
         <div className="view-content">
+          {activeView === 'plc' && (
+            <PlcDashboard
+              mcConnected={mcConnected}
+              mcValues={mcValues}
+              ioVariableList={ioVariableList}
+            />
+          )}
+
           {activeView === 'mc' && (
             <section className="parsed-view mc-view">
               <div className="parsed-view-header">

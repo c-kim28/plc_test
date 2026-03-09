@@ -3,19 +3,19 @@
   "Y14C": {
     "dataType": "Boolean",
     "length": 1,
-    "value": 1,
+    "value": 0,
     "name": "warningLightRed_Y14C"
   },
   "Y14D": {
     "dataType": "Boolean",
     "length": 1,
-    "value": 1,
+    "value": 0,
     "name": "warningLightYellow_Y14D"
   },
   "Y14E": {
     "dataType": "Boolean",
     "length": 1,
-    "value": 1,
+    "value": 0,
     "name": "warningLightGreen_Y14E"
   },
   "Y14F": {
@@ -57,7 +57,7 @@
   "M303": {
     "dataType": "Boolean",
     "length": 1,
-    "value": 0,
+    "value": 1,
     "name": "emergencyStopLR_M303"
   },
   "M304": {
@@ -93,7 +93,7 @@
   "M309": {
     "dataType": "Boolean",
     "length": 1,
-    "value": 0,
+    "value": 1,
     "name": "clutchValveError_M309"
   },
   "M310": {
@@ -135,7 +135,7 @@
   "M316": {
     "dataType": "Boolean",
     "length": 1,
-    "value": 0,
+    "value": 1,
     "name": "brakeResistorAlarm_M316"
   },
   "M317": {
@@ -159,7 +159,7 @@
   "M320": {
     "dataType": "Boolean",
     "length": 1,
-    "value": 1,
+    "value": 0,
     "name": "None3_M320"
   },
   "M321": {
@@ -237,7 +237,7 @@
   "M333": {
     "dataType": "Boolean",
     "length": 1,
-    "value": 0,
+    "value": 1,
     "name": "clutchAirAlarmLow_M333"
   },
   "M334": {
