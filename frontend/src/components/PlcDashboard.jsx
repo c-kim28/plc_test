@@ -55,13 +55,84 @@ function filterAndSliceBySearch(rows, search) {
   return filtered.slice(0, limit)
 }
 
-function PlcDashboard({ mcConnected, mcValues, ioVariableList }) {
+function formatDurationMs(ms) {
+  const value = Number(ms)
+  if (!Number.isFinite(value) || value <= 0) return '-'
+  if (value < 1000) return `${Math.round(value)}ms`
+  const sec = value / 1000
+  if (sec < 60) return `${sec % 1 === 0 ? sec.toFixed(0) : sec.toFixed(2)}초`
+  const min = sec / 60
+  if (min < 60) return `${min % 1 === 0 ? min.toFixed(0) : min.toFixed(2)}분`
+  const hour = min / 60
+  return `${hour % 1 === 0 ? hour.toFixed(0) : hour.toFixed(2)}시간`
+}
+
+const POLL_RATE_UNITS = [
+  { key: 'ms', label: 'ms', factor: 1 },
+  { key: 's', label: 's', factor: 1000 },
+  { key: 'min', label: 'min', factor: 60000 },
+  { key: 'hr', label: 'hr', factor: 3600000 },
+]
+
+const POLL_THREAD_TITLES = {
+  '50ms': '실시간 공정값',
+  '1s': '경고/부저/입출력',
+  '1min': 'SPM/CPM 요약',
+  '1h': '금형/셋업',
+}
+
+const POLL_THREAD_SUBTITLES = {
+  '50ms': '각도/온도/생산량 고속 갱신',
+  '1s': '알람, 램프, 카운터 주기',
+  '1min': '사이클 트렌드 집계',
+  '1h': '금형 번호/이름/셋업',
+}
+
+function toPollRateDraft(intervalMs) {
+  const value = Number(intervalMs)
+  if (!Number.isFinite(value) || value <= 0) return { value: '', unit: 'ms' }
+  if (value % 3600000 === 0) return { value: '', unit: 'hr', placeholder: String(value / 3600000) }
+  if (value % 60000 === 0) return { value: '', unit: 'min', placeholder: String(value / 60000) }
+  if (value % 1000 === 0) return { value: '', unit: 's', placeholder: String(value / 1000) }
+  return { value: '', unit: 'ms', placeholder: String(value) }
+}
+
+function draftToMs(draft) {
+  const unit = POLL_RATE_UNITS.find((u) => u.key === draft?.unit) || POLL_RATE_UNITS[0]
+  const source = String(draft?.value ?? '').trim() || String(draft?.placeholder ?? '').trim()
+  const raw = Number(source)
+  if (!Number.isFinite(raw) || raw <= 0) return NaN
+  return raw * unit.factor
+}
+
+function getDraftPlaceholder(thread, draft) {
+  if (draft?.placeholder && String(draft.placeholder).trim()) return String(draft.placeholder)
+  const ms = Number(thread?.interval_ms)
+  if (!Number.isFinite(ms) || ms <= 0) return ''
+  const unit = draft?.unit || 'ms'
+  const def = POLL_RATE_UNITS.find((u) => u.key === unit) || POLL_RATE_UNITS[0]
+  return String(ms / def.factor)
+}
+
+function getDraftPreviewText(thread, draft) {
+  const ms = draftToMs(draft)
+  if (Number.isFinite(ms) && ms > 0) return formatDurationMs(ms)
+  return formatDurationMs(thread?.interval_ms)
+}
+
+function PlcDashboard({ mcConnected, mcValues, ioVariableList, apiUrl }) {
   const [plcTrend, setPlcTrend] = useState({ spm: [], balanceAir: [], productionRate: [] })
   const [activeTab, setActiveTab] = useState('main')
   const [moldIndex, setMoldIndex] = useState(0)
   const [showMoldList, setShowMoldList] = useState(false)
   const [ioSearchStart, setIoSearchStart] = useState('')
   const [ioSearchEnd, setIoSearchEnd] = useState('')
+  const [pollRateConfig, setPollRateConfig] = useState(null)
+  const [pollRateDraft, setPollRateDraft] = useState({})
+  const [pollRateLoading, setPollRateLoading] = useState(false)
+  const [pollRateSaving, setPollRateSaving] = useState(false)
+  const [pollRateError, setPollRateError] = useState('')
+  const [pollRateMessage, setPollRateMessage] = useState('')
 
   const infoByName = useMemo(() => Object.fromEntries(ioVariableList), [ioVariableList])
 
@@ -204,6 +275,7 @@ function PlcDashboard({ mcConnected, mcValues, ioVariableList }) {
   }), [activeWarnings])
 
   const ioSearchParsed = useMemo(() => parseIoSearch(ioSearchStart, ioSearchEnd), [ioSearchStart, ioSearchEnd])
+  const pollRateThreads = useMemo(() => pollRateConfig?.threads || [], [pollRateConfig])
 
   const ioInputsDisplay = useMemo(
     () => filterAndSliceBySearch(ioRows.filter((r) => r.dir === '입력'), ioSearchParsed),
@@ -450,6 +522,68 @@ function PlcDashboard({ mcConnected, mcValues, ioVariableList }) {
     }).join(' ')
   }
 
+  const loadPollRates = async () => {
+    if (!apiUrl) return
+    setPollRateLoading(true)
+    setPollRateError('')
+    try {
+      const res = await fetch(`${apiUrl}/api/mc/poll-rates`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '폴링레이트 정보를 가져오지 못했습니다.')
+      setPollRateConfig(data)
+      const nextDraft = {}
+      for (const thread of data.threads || []) {
+        nextDraft[thread.key] = toPollRateDraft(thread.interval_ms)
+      }
+      setPollRateDraft(nextDraft)
+    } catch (err) {
+      setPollRateError(err.message || '폴링레이트 정보를 가져오지 못했습니다.')
+    } finally {
+      setPollRateLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab !== 'pollrate') return
+    if (!pollRateConfig) loadPollRates()
+  }, [activeTab])
+
+  const handleSavePollRates = async () => {
+    if (!pollRateConfig || !apiUrl) return
+    const minMs = Number(pollRateConfig.min_ms ?? 50)
+    const maxMs = Number(pollRateConfig.max_ms ?? 43200000)
+    const intervals = {}
+    for (const thread of pollRateThreads) {
+      const draft = pollRateDraft[thread.key]
+      const typed = String(draft?.value ?? '').trim()
+      let value = draftToMs(draft)
+      if (!typed) value = Number(thread.interval_ms)
+      if (!Number.isFinite(value) || value < minMs || value > maxMs) {
+        setPollRateError(`폴링레이트는 ${formatDurationMs(minMs)} ~ ${formatDurationMs(maxMs)} 범위로 입력해 주세요.`)
+        return
+      }
+      intervals[thread.key] = Math.round(value)
+    }
+    setPollRateSaving(true)
+    setPollRateError('')
+    setPollRateMessage('')
+    try {
+      const res = await fetch(`${apiUrl}/api/mc/poll-rates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intervals_ms: intervals }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '폴링레이트 저장에 실패했습니다.')
+      setPollRateMessage('폴링레이트를 저장했습니다.')
+      await loadPollRates()
+    } catch (err) {
+      setPollRateError(err.message || '폴링레이트 저장에 실패했습니다.')
+    } finally {
+      setPollRateSaving(false)
+    }
+  }
+
   return (
     <section className="parsed-view plc-view">
       <div className="plc-hero">
@@ -471,6 +605,7 @@ function PlcDashboard({ mcConnected, mcValues, ioVariableList }) {
         <button type="button" className={`plc-subtab ${activeTab === 'mold' ? 'active' : ''}`} onClick={() => setActiveTab('mold')}>금형데이터</button>
         <button type="button" className={`plc-subtab ${activeTab === 'counter' ? 'active' : ''}`} onClick={() => setActiveTab('counter')}>생산카운터</button>
         <button type="button" className={`plc-subtab ${activeTab === 'io' ? 'active' : ''}`} onClick={() => setActiveTab('io')}>PLC 입출력</button>
+        <button type="button" className={`plc-subtab ${activeTab === 'pollrate' ? 'active' : ''}`} onClick={() => setActiveTab('pollrate')}>PLC 폴링레이트</button>
       </div>
 
       {activeTab === 'main' && <div className="plc-body">
@@ -915,6 +1050,96 @@ function PlcDashboard({ mcConnected, mcValues, ioVariableList }) {
               </div>
             </article>
           </div>
+        </section>
+      )}
+
+      {activeTab === 'pollrate' && (
+        <section className="plc-subview">
+          <article className="plc-sub-card plc-pollrate-card">
+            <div className="plc-pollrate-head">
+              <h3>스레드별 폴링레이트 설정</h3>
+              <button type="button" className="mold-list-btn" onClick={loadPollRates} disabled={pollRateLoading}>
+                새로고침
+              </button>
+            </div>
+            <p className="plc-pollrate-range">
+              설정 범위: {formatDurationMs(pollRateConfig?.min_ms ?? 50)} ~ {formatDurationMs(pollRateConfig?.max_ms ?? 43200000)}
+            </p>
+            {pollRateError && <p className="error-message">{pollRateError}</p>}
+            {pollRateMessage && <p className="plc-pollrate-ok">{pollRateMessage}</p>}
+            {pollRateLoading && !pollRateThreads.length ? (
+              <p className="plc-alert-empty">폴링레이트 정보를 불러오는 중...</p>
+            ) : (
+              <div className="plc-pollrate-grid">
+                {pollRateThreads.map((thread) => (
+                  <div key={thread.key} className="plc-pollrate-item">
+                    <div className="plc-pollrate-item-head">
+                      <div className="plc-pollrate-title-wrap">
+                        <strong>{POLL_THREAD_TITLES[thread.key] || `${thread.key} 스레드`}</strong>
+                        <small>{POLL_THREAD_SUBTITLES[thread.key] || thread.key}</small>
+                      </div>
+                      <span>{thread.entry_count}개 변수</span>
+                    </div>
+                    <div className="plc-pollrate-input-row">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="plc-io-search-input"
+                        value={pollRateDraft[thread.key]?.value ?? ''}
+                        placeholder={getDraftPlaceholder(thread, pollRateDraft[thread.key])}
+                        onChange={(e) => setPollRateDraft((prev) => ({
+                          ...prev,
+                          [thread.key]: {
+                            ...(prev[thread.key] || { unit: 'ms', placeholder: '' }),
+                            value: e.target.value,
+                          },
+                        }))}
+                      />
+                      <select
+                        className="plc-pollrate-unit"
+                        value={pollRateDraft[thread.key]?.unit ?? 'ms'}
+                        onChange={(e) => setPollRateDraft((prev) => ({
+                          ...prev,
+                          [thread.key]: {
+                            ...(prev[thread.key] || { value: '', placeholder: '' }),
+                            unit: e.target.value,
+                          },
+                        }))}
+                      >
+                        {POLL_RATE_UNITS.map((unit) => (
+                          <option key={unit.key} value={unit.key}>{unit.label}</option>
+                        ))}
+                      </select>
+                      <span className="plc-pollrate-human">현재: {getDraftPreviewText(thread, pollRateDraft[thread.key])}</span>
+                    </div>
+                    <div className="plc-pollrate-list">
+                      {(thread.entries || []).map((entry) => {
+                        const desc = infoByName[entry.name]?.description?.trim()
+                        return (
+                          <div key={entry.name} className="plc-pollrate-list-item">
+                            <span>{entry.name}</span>
+                            <small>{desc || `${entry.device}${entry.address}`}</small>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="plc-pollrate-footer">
+              <span className={`plc-pollrate-conn ${mcConnected ? 'online' : 'offline'}`}>
+                {mcConnected ? 'MC 연결 중' : 'MC 미연결'}
+              </span>
+              <span className="plc-pollrate-note">입력한 항목만 변경되고, 비어 있는 항목은 현재값이 유지됩니다.</span>
+            </div>
+            <div className="button-row plc-pollrate-actions">
+              <button className="btn btn-primary" type="button" onClick={handleSavePollRates} disabled={pollRateSaving || pollRateLoading || !pollRateThreads.length}>
+                {pollRateSaving ? '저장 중...' : '폴링레이트 저장'}
+              </button>
+            </div>
+          </article>
         </section>
       )}
 

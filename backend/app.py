@@ -248,6 +248,66 @@ def mc_disconnect():
     return {"ok": True}
 
 
+@app.route("/api/mc/poll-rates", methods=["GET"])
+def mc_poll_rates():
+    try:
+        from mc_poller import get_poll_intervals, get_poll_thread_entries, MIN_INTERVAL_SEC, MAX_INTERVAL_SEC
+    except ImportError:
+        _backend_dir = os.path.dirname(os.path.abspath(__file__))
+        if _backend_dir not in sys.path:
+            sys.path.insert(0, _backend_dir)
+        from mc_poller import get_poll_intervals, get_poll_thread_entries, MIN_INTERVAL_SEC, MAX_INTERVAL_SEC
+
+    intervals = get_poll_intervals()
+    grouped = get_poll_thread_entries()
+    threads = []
+    for key in ("50ms", "1s", "1min", "1h"):
+        entries = grouped.get(key, [])
+        threads.append({
+            "key": key,
+            "interval_ms": int(round(float(intervals.get(key, 0)) * 1000)),
+            "entry_count": len(entries),
+            "entries": [{"name": e[0], "device": e[1], "address": e[2]} for e in entries],
+        })
+    return {
+        "min_ms": int(MIN_INTERVAL_SEC * 1000),
+        "max_ms": int(MAX_INTERVAL_SEC * 1000),
+        "threads": threads,
+    }
+
+
+@app.route("/api/mc/poll-rates", methods=["POST", "OPTIONS"])
+def mc_poll_rates_update():
+    if request.method == "OPTIONS":
+        return "", 204
+    try:
+        data = request.get_json(silent=True) or {}
+        intervals_ms = data.get("intervals_ms") or {}
+        interval_map_sec = {}
+        for key in ("50ms", "1s", "1min", "1h"):
+            if key not in intervals_ms:
+                continue
+            interval_map_sec[key] = float(intervals_ms[key]) / 1000.0
+    except (TypeError, ValueError) as e:
+        return {"error": f"잘못된 요청: {e}"}, 400
+
+    try:
+        from mc_poller import set_poll_intervals
+    except ImportError:
+        _backend_dir = os.path.dirname(os.path.abspath(__file__))
+        if _backend_dir not in sys.path:
+            sys.path.insert(0, _backend_dir)
+        from mc_poller import set_poll_intervals
+
+    try:
+        set_poll_intervals(interval_map_sec)
+        return {"ok": True}
+    except ValueError as e:
+        return {"error": str(e)}, 400
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
 @app.route("/api/influxdb/status", methods=["GET"])
 def influxdb_status():
     """InfluxDB 연결 상태 확인 (연결 시도 후 결과 반환)."""

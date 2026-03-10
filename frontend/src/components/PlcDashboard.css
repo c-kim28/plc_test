@@ -302,6 +302,175 @@
   color: var(--text-secondary);
 }
 
+.plc-pollrate-card {
+  padding: 1rem;
+}
+
+.plc-pollrate-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.plc-pollrate-range {
+  margin-top: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.plc-pollrate-grid {
+  margin-top: 0.7rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  align-items: start;
+}
+
+.plc-pollrate-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.plc-pollrate-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.plc-pollrate-title-wrap {
+  display: grid;
+  gap: 0.16rem;
+  min-height: 2rem;
+}
+
+.plc-pollrate-item-head strong {
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
+.plc-pollrate-title-wrap small {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  line-height: 1.2;
+}
+
+.plc-pollrate-item-head span {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  margin-top: 0.12rem;
+}
+
+.plc-pollrate-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.plc-pollrate-unit {
+  min-width: 5.2rem;
+  font-size: 0.84rem;
+  padding: 0.47rem 0.62rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+}
+
+.plc-pollrate-unit:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.plc-pollrate-human {
+  font-size: 0.78rem;
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+
+.plc-pollrate-list {
+  border-top: 1px dashed rgba(255, 255, 255, 0.15);
+  padding-top: 0.45rem;
+  max-height: 220px;
+  overflow-y: auto;
+  display: grid;
+  gap: 0.34rem;
+}
+
+.plc-pollrate-list-item {
+  padding: 0.35rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.plc-pollrate-list-item span {
+  font-size: 0.72rem;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.plc-pollrate-list-item small {
+  font-size: 0.67rem;
+  color: var(--text-secondary);
+}
+
+.plc-pollrate-ok {
+  margin-top: 0.45rem;
+  color: #8de6a2;
+  font-size: 0.78rem;
+}
+
+.plc-pollrate-footer {
+  margin-top: 0.8rem;
+  padding-top: 0.62rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.14);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.8rem;
+  align-items: center;
+}
+
+.plc-pollrate-conn {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.52rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.plc-pollrate-conn.online {
+  color: #8de6a2;
+  border-color: rgba(81, 207, 102, 0.35);
+  background: rgba(81, 207, 102, 0.12);
+}
+
+.plc-pollrate-conn.offline {
+  color: #ff9d9d;
+  border-color: rgba(255, 107, 107, 0.35);
+  background: rgba(255, 107, 107, 0.12);
+}
+
+.plc-pollrate-note {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.plc-pollrate-actions {
+  margin-top: 0.75rem;
+  padding-top: 0.15rem;
+}
+
 .plc-io-grid {
   margin-top: 0.65rem;
   display: grid;
@@ -1466,6 +1635,10 @@
   }
 
   .plc-address-row {
+    grid-template-columns: 1fr;
+  }
+
+  .plc-pollrate-grid {
     grid-template-columns: 1fr;
   }
 

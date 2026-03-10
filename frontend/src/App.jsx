@@ -478,6 +478,7 @@ function App() {
               mcConnected={mcConnected}
               mcValues={mcValues}
               ioVariableList={ioVariableList}
+              apiUrl={API_URL}
             />
           )}
 

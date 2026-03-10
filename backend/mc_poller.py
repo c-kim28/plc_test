@@ -19,6 +19,16 @@ INTERVAL_50MS = 0.05
 INTERVAL_1S = 1.0
 INTERVAL_1MIN = 60.0
 INTERVAL_1H = 3600.0
+MIN_INTERVAL_SEC = 0.05
+MAX_INTERVAL_SEC = 12 * 3600.0
+
+_interval_lock = threading.Lock()
+_interval_by_key = {
+    "50ms": INTERVAL_50MS,
+    "1s": INTERVAL_1S,
+    "1min": INTERVAL_1MIN,
+    "1h": INTERVAL_1H,
+}
 
 
 def _poll_chunk(host, port, chunk):
@@ -45,7 +55,44 @@ def _do_poll_entries(host, port, entries, on_parsed, on_error):
         on_parsed(merged)
 
 
-def _run_interval_loop(host, port, entries, interval_sec, on_parsed, on_error, stop_event, label):
+def get_interval_seconds(key):
+    with _interval_lock:
+        return _interval_by_key.get(key)
+
+
+def set_poll_intervals(interval_map_sec):
+    """
+    interval_map_sec: {"50ms": sec, "1s": sec, "1min": sec, "1h": sec}
+    """
+    valid_keys = ("50ms", "1s", "1min", "1h")
+    with _interval_lock:
+        for key in valid_keys:
+            if key not in interval_map_sec:
+                continue
+            value = float(interval_map_sec[key])
+            if value < MIN_INTERVAL_SEC or value > MAX_INTERVAL_SEC:
+                raise ValueError("폴링레이트는 50ms 이상 12시간 이하로 설정해야 합니다.")
+            _interval_by_key[key] = value
+
+
+def get_poll_intervals():
+    with _interval_lock:
+        return dict(_interval_by_key)
+
+
+def get_poll_thread_entries():
+    e_50ms, e_1s, e_1min, e_1h = get_mc_entries_by_poll_interval()
+    if POLL_ENTRY_LIMIT > 0 and len(e_50ms) > POLL_ENTRY_LIMIT:
+        e_50ms = e_50ms[:POLL_ENTRY_LIMIT]
+    return {
+        "50ms": e_50ms,
+        "1s": e_1s,
+        "1min": e_1min,
+        "1h": e_1h,
+    }
+
+
+def _run_interval_loop(host, port, entries, interval_key, on_parsed, on_error, stop_event, label):
     """한 주기 스레드: 첫 폴링 1회 후, interval_sec마다 폴링."""
     if not entries:
         return
@@ -54,6 +101,7 @@ def _run_interval_loop(host, port, entries, interval_sec, on_parsed, on_error, s
     except Exception as e:
         on_error(str(e))
     while not stop_event.is_set():
+        interval_sec = get_interval_seconds(interval_key) or MIN_INTERVAL_SEC
         if stop_event.wait(interval_sec):
             break
         try:
@@ -70,9 +118,11 @@ def run_poller(host, port, on_parsed, on_error, stop_event):
     - 1min: C.P.M, S.P.M
     - 1h: 현재/다음 금형번호·금형이름·다이하이트·바란스에어, 생산계획량, 목표 타발수
     """
-    e_50ms, e_1s, e_1min, e_1h = get_mc_entries_by_poll_interval()
-    if POLL_ENTRY_LIMIT > 0 and len(e_50ms) > POLL_ENTRY_LIMIT:
-        e_50ms = e_50ms[:POLL_ENTRY_LIMIT]
+    grouped = get_poll_thread_entries()
+    e_50ms = grouped["50ms"]
+    e_1s = grouped["1s"]
+    e_1min = grouped["1min"]
+    e_1h = grouped["1h"]
     total = len(e_50ms) + len(e_1s) + len(e_1min) + len(e_1h)
     if total == 0:
         print("[MC] mc_fake_values.json 항목 없음", flush=True)
@@ -81,17 +131,17 @@ def run_poller(host, port, on_parsed, on_error, stop_event):
           % (total, len(e_50ms), len(e_1s), len(e_1min), len(e_1h)), flush=True)
 
     threads = []
-    for entries, interval, label in [
-        (e_50ms, INTERVAL_50MS, "50ms"),
-        (e_1s, INTERVAL_1S, "1s"),
-        (e_1min, INTERVAL_1MIN, "1min"),
-        (e_1h, INTERVAL_1H, "1h"),
+    for entries, interval_key, label in [
+        (e_50ms, "50ms", "50ms"),
+        (e_1s, "1s", "1s"),
+        (e_1min, "1min", "1min"),
+        (e_1h, "1h", "1h"),
     ]:
         if not entries:
             continue
         t = threading.Thread(
             target=_run_interval_loop,
-            args=(host, port, entries, interval, on_parsed, on_error, stop_event, label),
+            args=(host, port, entries, interval_key, on_parsed, on_error, stop_event, label),
             name="mc_poll_%s" % label,
             daemon=True,
         )
