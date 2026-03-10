@@ -190,6 +190,12 @@ function App() {
   const [sensorData, setSensorData] = useState({}) // { VVB001: { value, ts }, TP3237: { value, ts } }
   const [mqttConnected, setMqttConnected] = useState(false)
   const [mqttError, setMqttError] = useState('')
+  const [csvExportOpen, setCsvExportOpen] = useState(false)
+  const [csvExportStart, setCsvExportStart] = useState('')
+  const [csvExportEnd, setCsvExportEnd] = useState('')
+  const [csvExportGroup, setCsvExportGroup] = useState('50ms')
+  const [csvExportError, setCsvExportError] = useState('')
+  const [csvExportLoading, setCsvExportLoading] = useState(false)
   const eventSourceRef = useRef(null)
   /** 타발수 등: 리셋(음수) 시 처음 보였던 시작값으로 표시 (예: 10000 시작 → 리셋 시 10000) */
   const counterStartRef = useRef({})
@@ -349,6 +355,65 @@ function App() {
     }
   }
 
+  /** KST(Asia/Seoul) 기준으로 Date를 datetime-local 값 "YYYY-MM-DDTHH:mm"으로 포맷 */
+  const formatKstForInput = (d) => {
+    const dateStr = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' })
+    const timeStr = d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false })
+    return `${dateStr}T${timeStr}`
+  }
+
+  /** datetime-local 값 "YYYY-MM-DDTHH:mm"을 KST로 해석해 UTC ISO 문자열 반환 */
+  const kstInputToIso = (s) => new Date(s.trim() + ':00+09:00').toISOString()
+
+  const openCsvExportModal = () => {
+    const now = new Date()
+    const end = new Date(now)
+    const start = new Date(now.getTime() - 1 * 60 * 60 * 1000)
+    setCsvExportStart(formatKstForInput(start))
+    setCsvExportEnd(formatKstForInput(end))
+    setCsvExportError('')
+    setCsvExportOpen(true)
+  }
+
+  const handleCsvExportDownload = async () => {
+    const start = csvExportStart.trim()
+    const end = csvExportEnd.trim()
+    const group = csvExportGroup || '50ms'
+    if (!start || !end) {
+      setCsvExportError('시작 시간과 종료 시간을 입력하세요.')
+      return
+    }
+    const startISO = encodeURIComponent(kstInputToIso(start))
+    const endISO = encodeURIComponent(kstInputToIso(end))
+    const groupEnc = encodeURIComponent(group)
+    setCsvExportError('')
+    setCsvExportLoading(true)
+    try {
+      const res = await fetch(`${API_URL}/api/influxdb/export-csv?start=${startISO}&end=${endISO}&group=${groupEnc}`, {
+        method: 'GET',
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setCsvExportError(data.error || `오류 ${res.status}`)
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const safe = (s) => String(s).replace(/:/g, '-')
+      const filename = `${safe(start)}_${safe(end)}_${group}.csv`
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
+      setCsvExportOpen(false)
+    } catch (e) {
+      setCsvExportError(e.message || '다운로드 실패')
+    } finally {
+      setCsvExportLoading(false)
+    }
+  }
+
   /** 바이트 하나를 8비트 문자열로 (MSB 먼저) */
   const byteToBits8 = (b) => ((b & 0xff).toString(2)).padStart(8, '0')
 
@@ -439,10 +504,68 @@ function App() {
           <span className="logo-icon">◉</span>
           <h1>MC Protocol(3E) & MQTT(IOLink)</h1>
         </div>
-        <div className={`status-badge ${serverConnected ? 'online' : 'offline'}`}>
-          {serverConnected ? '서버 연결됨' : '서버 연결 끊김'}
+        <div className="header-actions">
+          <button type="button" className="btn btn-secondary csv-export-btn" onClick={openCsvExportModal}>
+            InfluxDB CSV 내보내기
+          </button>
+          <div className={`status-badge ${serverConnected ? 'online' : 'offline'}`}>
+            {serverConnected ? '서버 연결됨' : '서버 연결 끊김'}
+          </div>
         </div>
       </header>
+
+      {csvExportOpen && (
+        <div className="modal-overlay" onClick={() => setCsvExportOpen(false)} aria-hidden="false">
+          <div className="modal csv-export-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>InfluxDB 데이터 CSV 다운로드</h3>
+            <p className="modal-desc">폴링 주기 그룹을 선택하고, 조회 기간(시작·종료)을 설정한 뒤 다운로드하세요. (KST 기준, 행=변수·열=타임스탬프)</p>
+            <div className="control-row">
+              <div className="field-group">
+                <label htmlFor="csv-group">폴링 주기 그룹</label>
+                <select
+                  id="csv-group"
+                  value={csvExportGroup}
+                  onChange={(e) => setCsvExportGroup(e.target.value)}
+                >
+                  <option value="50ms">50ms</option>
+                  <option value="1s">1s</option>
+                  <option value="1min">1min</option>
+                  <option value="1h">1h</option>
+                </select>
+              </div>
+            </div>
+            <div className="control-row">
+              <div className="field-group">
+                <label htmlFor="csv-start">시작 시간 (KST)</label>
+                <input
+                  id="csv-start"
+                  type="datetime-local"
+                  value={csvExportStart}
+                  onChange={(e) => setCsvExportStart(e.target.value)}
+                />
+              </div>
+              <div className="field-group">
+                <label htmlFor="csv-end">종료 시간 (KST)</label>
+                <input
+                  id="csv-end"
+                  type="datetime-local"
+                  value={csvExportEnd}
+                  onChange={(e) => setCsvExportEnd(e.target.value)}
+                />
+              </div>
+            </div>
+            {csvExportError && <p className="error-message">{csvExportError}</p>}
+            <div className="modal-actions">
+              <button type="button" className="btn btn-primary" onClick={handleCsvExportDownload} disabled={csvExportLoading}>
+                {csvExportLoading ? '다운로드 중…' : 'CSV 다운로드'}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setCsvExportOpen(false)}>
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="main-wrap">
         <nav className="side-tabs" aria-label="화면 전환">

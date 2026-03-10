@@ -30,6 +30,12 @@ def _get_client():
         return None
 
 
+def _get_client_obj():
+    """쓰기용이 아닌 query_api 등에 쓸 InfluxDBClient 인스턴스 반환."""
+    _get_client()
+    return _client
+
+
 def write_plc_point(variable: str, value, device_type: str = ""):
     """
     단일 변수 한 점 기록.
@@ -127,3 +133,122 @@ def close():
             pass
         _client = None
         _write_api = None
+
+
+def export_plc_csv(start_iso: str, end_iso: str) -> tuple[str | None, str | None]:
+    """
+    지정 구간(시작/종료 ISO8601)의 plc measurement 데이터를 Flux로 조회해 CSV 문자열 반환.
+    반환: (csv_string, None) 성공 시, (None, error_message) 실패 시.
+    """
+    import csv
+    import io
+    client = _get_client_obj()
+    if client is None or not is_configured():
+        return None, "InfluxDB 연결이 없습니다."
+    start_ = start_iso.strip().replace(" ", "T", 1)
+    end_ = end_iso.strip().replace(" ", "T", 1)
+    if not start_ or not end_:
+        return None, "시작/종료 시간을 입력하세요."
+    if not start_.endswith("Z") and "+" not in start_:
+        start_ = start_ + "Z"
+    if not end_.endswith("Z") and "+" not in end_:
+        end_ = end_ + "Z"
+    query = (
+        f'from(bucket: "{INFLUX_BUCKET}") '
+        f'|> range(start: time(v: "{start_}"), stop: time(v: "{end_}")) '
+        '|> filter(fn: (r) => r._measurement == "plc") '
+        '|> sort(columns: ["_time", "variable"])'
+    )
+    try:
+        query_api = client.query_api()
+        tables = query_api.query(query, org=INFLUX_ORG)
+    except Exception as e:
+        return None, str(e)
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(["time", "variable", "field", "value"])
+    row_count = 0
+    for table in tables or []:
+        for record in getattr(table, "records", []) or []:
+            vals = getattr(record, "values", {}) or {}
+            t = vals.get("_time", "")
+            var = vals.get("variable", "")
+            field = vals.get("_field", "")
+            val = vals.get("_value", "")
+            if isinstance(val, (int, float)):
+                val = str(val)
+            writer.writerow([t, var, field, val])
+            row_count += 1
+    if row_count == 0:
+        writer.writerow([])
+        return out.getvalue(), None  # 헤더만 있는 CSV도 반환
+    return out.getvalue(), None
+
+
+def export_plc_csv_pivot(start_iso: str, end_iso: str, group_key: str) -> tuple[str | None, str | None]:
+    """
+    지정 구간·폴링 그룹(50ms|1s|1min|1h)의 plc 데이터를 조회해
+    행=변수명, 열=타임스탬프, 셀=value 인 CSV 반환.
+    반환: (csv_string, None) 성공 시, (None, error_message) 실패 시.
+    """
+    import csv
+    import io
+
+    from mc_mapping import POLL_INTERVAL_KEYS, get_variable_names_by_poll_interval
+
+    if group_key not in POLL_INTERVAL_KEYS:
+        return None, f"지원하지 않는 그룹입니다. 사용 가능: {', '.join(POLL_INTERVAL_KEYS)}"
+    client = _get_client_obj()
+    if client is None or not is_configured():
+        return None, "InfluxDB 연결이 없습니다."
+    start_ = start_iso.strip().replace(" ", "T", 1)
+    end_ = end_iso.strip().replace(" ", "T", 1)
+    if not start_ or not end_:
+        return None, "시작/종료 시간을 입력하세요."
+    if not start_.endswith("Z") and "+" not in start_:
+        start_ = start_ + "Z"
+    if not end_.endswith("Z") and "+" not in end_:
+        end_ = end_ + "Z"
+    query = (
+        f'from(bucket: "{INFLUX_BUCKET}") '
+        f'|> range(start: time(v: "{start_}"), stop: time(v: "{end_}")) '
+        '|> filter(fn: (r) => r._measurement == "plc") '
+        '|> sort(columns: ["_time", "variable"])'
+    )
+    try:
+        query_api = client.query_api()
+        tables = query_api.query(query, org=INFLUX_ORG)
+    except Exception as e:
+        return None, str(e)
+    # (variable, time) -> value (마지막 값 사용; 동일 시점 중복 시 덮어씀)
+    data: dict[tuple[str, str], str] = {}
+    timestamps_set: set[str] = set()
+    for table in tables or []:
+        for record in getattr(table, "records", []) or []:
+            vals = getattr(record, "values", {}) or {}
+            t = vals.get("_time", "")
+            var = vals.get("variable", "")
+            val = vals.get("_value", "")
+            if isinstance(val, (int, float)):
+                val = str(val)
+            else:
+                val = str(val) if val is not None else ""
+            if var and t:
+                data[(var, t)] = val
+                timestamps_set.add(t)
+    var_names = get_variable_names_by_poll_interval().get(group_key, [])
+    if not var_names:
+        return None, f"해당 그룹({group_key})에 변수가 없습니다."
+    # 그룹 순서대로 행 출력; 데이터에만 있는 변수는 그룹 목록 뒤에 추가
+    ordered_vars = list(var_names)
+    for (v, _) in data:
+        if v not in ordered_vars:
+            ordered_vars.append(v)
+    timestamps = sorted(timestamps_set)
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(["variable"] + timestamps)
+    for var in ordered_vars:
+        row = [var] + [data.get((var, t), "") for t in timestamps]
+        writer.writerow(row)
+    return out.getvalue(), None

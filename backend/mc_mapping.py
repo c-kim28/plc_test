@@ -115,6 +115,23 @@ def get_mc_entries_by_poll_interval():
     return (e_50ms, e_1s, e_1min, e_1h)
 
 
+POLL_INTERVAL_KEYS = ("50ms", "1s", "1min", "1h")
+
+
+def get_variable_names_by_poll_interval() -> dict[str, list[str]]:
+    """
+    폴링 주기별 변수명 리스트. CSV export 시 그룹 필터·행 순서용.
+    반환: {"50ms": [name, ...], "1s": [...], "1min": [...], "1h": [...]}
+    """
+    e_50ms, e_1s, e_1min, e_1h = get_mc_entries_by_poll_interval()
+    return {
+        "50ms": [e[0] for e in e_50ms],
+        "1s": [e[0] for e in e_1s],
+        "1min": [e[0] for e in e_1min],
+        "1h": [e[0] for e in e_1h],
+    }
+
+
 def get_mc_entries_by_device(device: str, exclude_hourly_d: bool = False):
     """
     device: "M" | "D" | "Y"

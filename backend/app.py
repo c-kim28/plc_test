@@ -76,8 +76,8 @@ def _is_tcp_open(host: str, port: int, timeout_sec: float = 0.4) -> bool:
         return False
 
 
-def _ensure_local_mc_fake_server(host: str, port: int):
-    """127.0.0.1:5002 대상일 때 fake 3E 서버가 없으면 자동 실행."""
+def _start_fake_server_async(host: str, port: int):
+    """127.0.0.1:5002 대상일 때 fake 3E 서버가 없으면 백그라운드에서 기동 (요청 블로킹 없음)."""
     global mc_fake_server_proc
     if host not in ("127.0.0.1", "localhost") or port != 5002:
         return
@@ -86,24 +86,29 @@ def _ensure_local_mc_fake_server(host: str, port: int):
     if mc_fake_server_proc and mc_fake_server_proc.poll() is None:
         return
     fake_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plc_tcp_fake_response.py")
-    try:
-        mc_fake_server_proc = subprocess.Popen(
-            [sys.executable, fake_script],
-            cwd=os.path.dirname(fake_script),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        for _ in range(15):  # 최대 1.5초 대기
-            time.sleep(0.1)
-            if _is_tcp_open(host, port):
-                break
-        if not _is_tcp_open(host, port):
-            print("[MC] 가짜 서버(5002) 기동 대기 실패. 수동 실행: python backend/plc_tcp_fake_response.py", flush=True)
-    except Exception as e:
-        print("[MC] 가짜 서버 기동 예외:", e, flush=True)
-        mc_fake_server_proc = None
+
+    def _run():
+        global mc_fake_server_proc
+        try:
+            mc_fake_server_proc = subprocess.Popen(
+                [sys.executable, fake_script],
+                cwd=os.path.dirname(fake_script),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            for _ in range(15):
+                time.sleep(0.1)
+                if _is_tcp_open(host, port):
+                    break
+            if not _is_tcp_open(host, port):
+                print("[MC] 가짜 서버(5002) 기동 대기 실패. 수동 실행: python3 backend/plc_tcp_fake_response.py", flush=True)
+        except Exception as e:
+            print("[MC] 가짜 서버 기동 예외:", e, flush=True)
+            mc_fake_server_proc = None
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 @atexit.register
@@ -225,7 +230,7 @@ def mc_connect():
     if mc_thread and mc_thread.is_alive():
         return {"error": "이미 MC 프로토콜 폴링이 실행 중입니다."}, 400
 
-    _ensure_local_mc_fake_server(host, port)
+    _start_fake_server_async(host, port)
 
     try:
         from mc_poller import run_poller
@@ -362,6 +367,42 @@ def influxdb_test_write():
         return {"ok": False, "message": "InfluxDB 연결/기록 실패"}
     except Exception as e:
         return {"ok": False, "message": str(e)}
+
+
+@app.route("/api/influxdb/export-csv", methods=["GET", "POST", "OPTIONS"])
+def influxdb_export_csv():
+    """지정 기간·폴링 그룹(50ms|1s|1min|1h)별 피벗 CSV 반환. 행=변수, 열=타임스탬프."""
+    if request.method == "OPTIONS":
+        return "", 204
+    try:
+        if request.method == "GET":
+            start_iso = (request.args.get("start") or "").strip()
+            end_iso = (request.args.get("end") or "").strip()
+            group = (request.args.get("group") or "").strip()
+        else:
+            data = request.get_json(silent=True) or {}
+            start_iso = (data.get("start") or data.get("startTime") or "").strip()
+            end_iso = (data.get("end") or data.get("endTime") or "").strip()
+            group = (data.get("group") or "").strip()
+    except Exception as e:
+        return {"error": str(e)}, 400
+    if not start_iso or not end_iso:
+        return {"error": "시작 시간(start)과 종료 시간(end)을 입력하세요."}, 400
+    if group not in ("50ms", "1s", "1min", "1h"):
+        return {"error": "폴링 그룹(group)을 선택하세요. (50ms, 1s, 1min, 1h)"}, 400
+    try:
+        from influxdb_writer import export_plc_csv_pivot
+        csv_str, err = export_plc_csv_pivot(start_iso, end_iso, group)
+        if err:
+            return {"error": err}, 400
+        from flask import Response
+        return Response(
+            csv_str or "",
+            mimetype="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="plc_export.csv"'},
+        )
+    except Exception as e:
+        return {"error": str(e)}, 500
 
 
 # MQTT 구독 시작 (앱 로드 시 한 번만)
