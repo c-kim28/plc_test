@@ -36,8 +36,8 @@ def _poll_chunk(host, port, chunk):
     return read_mc_variables(host, port, chunk)
 
 
-def _do_poll_entries(host, port, entries, on_parsed, on_error):
-    """엔트리 리스트를 청크로 나누어 병렬 폴링 후 on_parsed(merged) 호출."""
+def _do_poll_entries(host, port, entries, on_parsed, on_error, interval_key=None):
+    """엔트리 리스트를 청크로 나누어 병렬 폴링 후 on_parsed(merged, interval_key) 호출."""
     if not entries:
         return
     chunks = [entries[i : i + CHUNK_SIZE] for i in range(0, len(entries), CHUNK_SIZE)]
@@ -52,7 +52,7 @@ def _do_poll_entries(host, port, entries, on_parsed, on_error):
             except Exception as e:
                 on_error(str(e))
     if merged:
-        on_parsed(merged)
+        on_parsed(merged, interval_key)
 
 
 def get_interval_seconds(key):
@@ -108,7 +108,7 @@ def _run_interval_loop(host, port, entries, interval_key, on_parsed, on_error, s
     if not entries:
         return
     try:
-        _do_poll_entries(host, port, entries, on_parsed, on_error)
+        _do_poll_entries(host, port, entries, on_parsed, on_error, interval_key=interval_key)
     except Exception as e:
         on_error(str(e))
     while not stop_event.is_set():
@@ -116,7 +116,7 @@ def _run_interval_loop(host, port, entries, interval_key, on_parsed, on_error, s
         if stop_event.wait(interval_sec):
             break
         try:
-            _do_poll_entries(host, port, entries, on_parsed, on_error)
+            _do_poll_entries(host, port, entries, on_parsed, on_error, interval_key=interval_key)
         except Exception as e:
             on_error(str(e))
 

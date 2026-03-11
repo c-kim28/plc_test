@@ -210,9 +210,8 @@ def health():
     return {"status": "ok"}
 
 
-def _mc_on_parsed(parsed):
+def _mc_on_parsed(parsed, interval_key=None):
     broadcast("mc_data", {"parsed": parsed})
-    # 폴링 완료 시점(ms 단위 반영)을 타임스탬프로 넘겨 InfluxDB _time이 폴링 주기대로 저장되도록 함
     ts = time.time()
     def _write():
         try:
@@ -220,6 +219,12 @@ def _mc_on_parsed(parsed):
             write_parsed_to_influx(parsed, timestamp=ts)
         except Exception as e:
             print("[InfluxDB] 기록 오류:", e, flush=True)
+        if interval_key:
+            try:
+                from poll_ndjson_logger import append_parsed_to_ndjson
+                append_parsed_to_ndjson(parsed, interval_key, ts)
+            except Exception as e:
+                print("[PollNDJSON] 기록 오류:", e, flush=True)
     _influx_write_executor.submit(_write)
 
 
