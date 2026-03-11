@@ -2,12 +2,14 @@
 폴링 주기별·날짜별 NDJSON 수집.
 매 폴링마다 한 줄(JSON 객체)만 append. 읽기/쓰기 효율적.
 경로: {POLL_LOGS_DIR}/{interval_key}/{YYYY-MM-DD}.ndjson
-한 줄 형식: {"t": unix_ts, "data": { "변수명": 값, ... }}
+한 줄 형식: {"t": "KST 시각 문자열", "data": { "변수명": 값, ... }}
 """
 import json
 import os
 import threading
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+KST = timezone(timedelta(hours=9))
 
 _DEFAULT_BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "poll_logs")
 _LOCK = threading.Lock()
@@ -43,7 +45,9 @@ def append_parsed_to_ndjson(parsed: dict, interval_key: str, timestamp: float) -
         return
     file_path = os.path.join(dir_path, date_str + ".ndjson")
     data = {k: _serialize_value(v) for k, v in parsed.items()}
-    record = {"t": timestamp, "data": data}
+    dt_utc = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+    t_kst = dt_utc.astimezone(KST).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "+09:00"
+    record = {"t": t_kst, "data": data}
     line = json.dumps(record, ensure_ascii=False) + "\n"
     with _LOCK:
         try:
