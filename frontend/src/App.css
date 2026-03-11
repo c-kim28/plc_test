@@ -66,7 +66,20 @@
 }
 
 .csv-export-btn {
-  font-size: 0.85rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  transition: background 0.2s, border-color 0.2s, transform 0.15s;
+}
+.csv-export-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
 }
 
 .modal-overlay {
@@ -842,51 +855,89 @@
   color: #fff;
 }
 
-/* 기간 입력 행 */
-.csv-export-modal .csv-datetime-row {
+/* 기간 입력: 하나의 블록으로 인식되도록 */
+.csv-export-modal .csv-section-datetime .csv-modal-label {
   display: flex;
-  align-items: flex-end;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
 }
 
-.csv-export-modal .csv-field {
+.csv-export-modal .csv-label-tz {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  padding: 0.15rem 0.45rem;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  font-style: normal;
+}
+
+.csv-export-modal .csv-datetime-block {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+}
+
+.csv-export-modal .csv-datetime-field {
   flex: 1 1 200px;
   min-width: 200px;
 }
 
-.csv-export-modal .csv-field label {
+.csv-export-modal .csv-datetime-field label {
   display: block;
-  font-size: 0.78rem;
-  font-weight: 500;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.4rem;
+  letter-spacing: 0.02em;
 }
 
-.csv-export-modal .csv-field input {
+.csv-export-modal .csv-datetime-field input {
   width: 100%;
   font-family: inherit;
   font-size: 0.9rem;
-  padding: 0.5rem 0.75rem;
-  background: var(--bg-tertiary);
+  padding: 0.55rem 0.8rem;
+  background: var(--bg-primary, #1a1a1a);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   color: var(--text-primary);
   box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.csv-export-modal .csv-field input:focus {
+.csv-export-modal .csv-datetime-field input:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.csv-export-modal .csv-datetime-field input:focus {
   outline: none;
   border-color: var(--accent, #3b82f6);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
 }
 
-.csv-export-modal .csv-datetime-sep {
+/* datetime-local 달력/시계 아이콘: 다크 배경에서 밝게 보이도록 */
+.csv-export-modal .csv-datetime-field input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+.csv-export-modal .csv-datetime-arrow {
   flex-shrink: 0;
   align-self: center;
   margin-bottom: 0.5rem;
-  font-size: 0.9rem;
+  font-size: 1rem;
+  font-weight: 300;
   color: var(--text-secondary);
+  opacity: 0.7;
 }
 
 /* 빠른 선택 */
@@ -952,9 +1003,4 @@
 
 .csv-export-modal .csv-modal-download {
   order: 1;
-}
-
-.csv-export-btn {
-  padding-inline: 0.9rem;
-  border-radius: 999px;
 }

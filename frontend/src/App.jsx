@@ -513,8 +513,8 @@ function App() {
           <h1>MC Protocol(3E) & MQTT(IOLink)</h1>
         </div>
         <div className="header-actions">
-          <button type="button" className="btn btn-secondary csv-export-btn" onClick={openCsvExportModal}>
-            InfluxDB CSV 내보내기
+          <button type="button" className="btn csv-export-btn" onClick={openCsvExportModal}>
+            Data Export
           </button>
           <div className={`status-badge ${serverConnected ? 'online' : 'offline'}`}>
             {serverConnected ? '서버 연결됨' : '서버 연결 끊김'}
@@ -544,26 +544,31 @@ function App() {
                 ))}
               </div>
             </section>
-            <section className="csv-modal-section">
-              <span className="csv-modal-label">조회 기간 (KST)</span>
-              <div className="csv-datetime-row">
-                <div className="csv-field">
-                  <label htmlFor="csv-start">시작</label>
+            <section className="csv-modal-section csv-section-datetime">
+              <span className="csv-modal-label">
+                조회 기간
+                <em className="csv-label-tz">KST</em>
+              </span>
+              <div className="csv-datetime-block">
+                <div className="csv-datetime-field">
+                  <label htmlFor="csv-start">시작 시간</label>
                   <input
                     id="csv-start"
                     type="datetime-local"
                     value={csvExportStart}
                     onChange={(e) => setCsvExportStart(e.target.value)}
+                    aria-label="시작 일시 (KST)"
                   />
                 </div>
-                <span className="csv-datetime-sep">~</span>
-                <div className="csv-field">
-                  <label htmlFor="csv-end">종료</label>
+                <span className="csv-datetime-arrow" aria-hidden="true">→</span>
+                <div className="csv-datetime-field">
+                  <label htmlFor="csv-end">종료 시간</label>
                   <input
                     id="csv-end"
                     type="datetime-local"
                     value={csvExportEnd}
                     onChange={(e) => setCsvExportEnd(e.target.value)}
+                    aria-label="종료 일시 (KST)"
                   />
                 </div>
               </div>
