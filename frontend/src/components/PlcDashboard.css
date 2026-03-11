@@ -1417,6 +1417,24 @@
   font-weight: 600;
 }
 
+/* 출력(램프/부저) 카드: 타이틀과 3색 레이블 한 줄 배치 */
+.plc-io-output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.plc-io-output-header h3 {
+  margin: 0;
+}
+
+.plc-io-output-header .plc-signal-lights {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
 .plc-signal-lights {
   margin-top: 0.7rem;
   display: flex;

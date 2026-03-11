@@ -1027,11 +1027,13 @@ function PlcDashboard({ mcConnected, mcValues, ioVariableList, apiUrl }) {
               </div>
             </article>
             <article className="plc-sub-card">
-              <h3>출력 (램프/부저)</h3>
-              <div className="plc-signal-lights">
-                <span className={`plc-light red ${Number(mcValues.warningLightRed_Y14C) === 1 ? 'on' : ''}`}>적색</span>
-                <span className={`plc-light yellow ${Number(mcValues.warningLightYellow_Y14D) === 1 ? 'on' : ''}`}>황색</span>
-                <span className={`plc-light green ${Number(mcValues.warningLightGreen_Y14E) === 1 ? 'on' : ''}`}>녹색</span>
+              <div className="plc-io-output-header">
+                <h3>출력 (램프/부저)</h3>
+                <div className="plc-signal-lights">
+                  <span className={`plc-light red ${Number(mcValues.warningLightRed_Y14C) === 1 ? 'on' : ''}`}>적색</span>
+                  <span className={`plc-light yellow ${Number(mcValues.warningLightYellow_Y14D) === 1 ? 'on' : ''}`}>황색</span>
+                  <span className={`plc-light green ${Number(mcValues.warningLightGreen_Y14E) === 1 ? 'on' : ''}`}>녹색</span>
+                </div>
               </div>
               <div className="plc-io-grid">
                 {ioOutputsDisplay.map((row) => (
