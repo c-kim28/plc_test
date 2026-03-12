@@ -5,6 +5,7 @@ MC 프로토콜(3E) 폴링. 웹 대시보드에서 폴링 시작 시 host:port(�
 """
 import os
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from mc_mapping import get_mc_entries_by_poll_interval
@@ -111,12 +112,24 @@ def _run_interval_loop(host, port, entries, interval_key, on_parsed, on_error, s
         _do_poll_entries(host, port, entries, on_parsed, on_error, interval_key=interval_key)
     except Exception as e:
         on_error(str(e))
+    last_polled_at = time.monotonic()
     while not stop_event.is_set():
-        interval_sec = get_interval_seconds(interval_key) or MIN_INTERVAL_SEC
-        if stop_event.wait(interval_sec):
+        # 고정 wait(interval_sec)을 쓰면 긴 주기 대기 중 주기 변경이 즉시 반영되지 않는다.
+        # 짧은 tick으로 남은 시간을 재계산해, 1h -> 1s 변경도 빠르게 반영한다.
+        while not stop_event.is_set():
+            interval_sec = get_interval_seconds(interval_key) or MIN_INTERVAL_SEC
+            due_at = last_polled_at + interval_sec
+            now = time.monotonic()
+            remaining = due_at - now
+            if remaining <= 0:
+                break
+            if stop_event.wait(min(remaining, 0.2)):
+                break
+        if stop_event.is_set():
             break
         try:
             _do_poll_entries(host, port, entries, on_parsed, on_error, interval_key=interval_key)
+            last_polled_at = time.monotonic()
         except Exception as e:
             on_error(str(e))
 

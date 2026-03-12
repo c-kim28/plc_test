@@ -555,9 +555,8 @@ function PlcDashboard({ mcConnected, mcValues, ioVariableList, apiUrl }) {
     const intervals = {}
     for (const thread of pollRateThreads) {
       const draft = pollRateDraft[thread.key]
-      const typed = String(draft?.value ?? '').trim()
       let value = draftToMs(draft)
-      if (!typed) value = Number(thread.interval_ms)
+      if (!Number.isFinite(value) || value <= 0) value = Number(thread.interval_ms)
       if (!Number.isFinite(value) || value < minMs || value > maxMs) {
         setPollRateError(`폴링레이트는 ${formatDurationMs(minMs)} ~ ${formatDurationMs(maxMs)} 범위로 입력해 주세요.`)
         return
@@ -1134,7 +1133,7 @@ function PlcDashboard({ mcConnected, mcValues, ioVariableList, apiUrl }) {
               <span className={`plc-pollrate-conn ${mcConnected ? 'online' : 'offline'}`}>
                 {mcConnected ? 'MC 연결 중' : 'MC 미연결'}
               </span>
-              <span className="plc-pollrate-note">입력한 항목만 변경되고, 비어 있는 항목은 현재값이 유지됩니다.</span>
+              <span className="plc-pollrate-note">값 또는 단위를 바꾼 항목만 반영되며, 미변경 항목은 현재값이 유지됩니다.</span>
             </div>
             <div className="button-row plc-pollrate-actions">
               <button className="btn btn-primary" type="button" onClick={handleSavePollRates} disabled={pollRateSaving || pollRateLoading || !pollRateThreads.length}>
