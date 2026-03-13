@@ -300,7 +300,15 @@ function App() {
     es.addEventListener('mc_data', (e) => {
       const data = JSON.parse(e.data || '{}')
       if (data.parsed && typeof data.parsed === 'object') {
-        setMcValues((prev) => ({ ...prev, ...data.parsed }))
+        setMcValues((prev) => {
+          const next = { ...prev }
+          for (const [key, value] of Object.entries(data.parsed)) {
+            // 폴링 순간 오류/타임아웃으로 들어온 '-'는 이전 정상값을 유지해 깜빡임을 줄인다.
+            if (value === '-' || value === null || value === undefined) continue
+            next[key] = value
+          }
+          return next
+        })
       }
     })
 

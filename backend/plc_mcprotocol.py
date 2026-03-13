@@ -6,6 +6,7 @@ pymcprotocol(Type3E) 읽기 + 요청/응답 HEX 덤프
 - 패킷 캡처 가능
 """
 import argparse
+import os
 import sys
 
 try:
@@ -16,6 +17,7 @@ except ImportError:
 
 PLC_HOST = "192.168.0.5"
 PLC_PORT = 5002
+DEBUG_ERRORS = (os.environ.get("MC_POLL_DEBUG_ERRORS", "").strip().lower() in ("1", "true", "yes", "on"))
 
 def parse_address(s: str) -> int:
     """주소 문자열 해석. 0x 접두사 있으면 16진수, 없으면 10진수."""
@@ -36,42 +38,81 @@ def device_to_headdevice(device: str, address: int) -> str:
 def read_mc_variables(host: str, port: int, entries: list) -> dict:
     """
     host:port에 pymcprotocol API만으로 읽기. 반환: {변수명: 값}. 실패 시 '-'.
-    변수마다 새 연결(가짜 서버는 연결당 요청 1개).
+    청크 단위로 연결 1회 유지, 읽기 실패 시 1회 재연결 후 재시도.
     """
     result = {name: "-" for name, *_ in entries}
-    for name, device, address, data_type, length in entries:
-        headdevice = device_to_headdevice(device, address)
+    if not entries:
+        return result
+
+    plc = pymcprotocol.Type3E()
+    connected = False
+
+    def _connect() -> bool:
+        nonlocal connected
+        if connected:
+            return True
         try:
-            plc = pymcprotocol.Type3E()
             plc.connect(host, port)
-        except Exception:
-            continue
+            connected = True
+            return True
+        except Exception as e:
+            if DEBUG_ERRORS:
+                print(f"[MC] connect 실패 {host}:{port}: {e}", flush=True)
+            connected = False
+            return False
+
+    def _reconnect() -> bool:
+        nonlocal connected
         try:
-            t = (data_type or "").strip().lower()
-            if t == "boolean":
-                vals = plc.batchread_bitunits(headdevice, readsize=length)
-                result[name] = vals[0] if vals else "-"
-            elif t == "word":
-                vals = plc.batchread_wordunits(headdevice, readsize=length)
-                result[name] = vals[0] if vals else "-"
-            elif t == "dword":
-                _, dword_vals = plc.randomread(word_devices=[], dword_devices=[headdevice])
-                result[name] = dword_vals[0] if dword_vals else "-"
-            elif t == "string":
-                words = plc.batchread_wordunits(headdevice, readsize=(length + 1) // 2)
-                b = b"".join(bytes([w & 0xFF, (w >> 8) & 0xFF]) for w in words)
-                s = b[:length].decode("ascii", errors="replace").rstrip("\x00")
-                result[name] = s or "-"
-            else:
-                vals = plc.batchread_wordunits(headdevice, readsize=max(1, length))
-                result[name] = vals[0] if vals else "-"
+            plc.close()
         except Exception:
             pass
-        finally:
+        connected = False
+        return _connect()
+
+    if not _connect():
+        return result
+
+    for name, device, address, data_type, length in entries:
+        headdevice = device_to_headdevice(device, address)
+        t = (data_type or "").strip().lower()
+        tried_reconnect = False
+        while True:
             try:
-                plc.close()
-            except Exception:
-                pass
+                if t == "boolean":
+                    vals = plc.batchread_bitunits(headdevice, readsize=length)
+                    result[name] = vals[0] if vals else "-"
+                elif t == "word":
+                    vals = plc.batchread_wordunits(headdevice, readsize=length)
+                    result[name] = vals[0] if vals else "-"
+                elif t == "dword":
+                    _, dword_vals = plc.randomread(word_devices=[], dword_devices=[headdevice])
+                    result[name] = dword_vals[0] if dword_vals else "-"
+                elif t == "string":
+                    words = plc.batchread_wordunits(headdevice, readsize=(length + 1) // 2)
+                    b = b"".join(bytes([w & 0xFF, (w >> 8) & 0xFF]) for w in words)
+                    s = b[:length].decode("ascii", errors="replace").rstrip("\x00")
+                    result[name] = s or "-"
+                else:
+                    vals = plc.batchread_wordunits(headdevice, readsize=max(1, length))
+                    result[name] = vals[0] if vals else "-"
+                break
+            except Exception as e:
+                if tried_reconnect:
+                    if DEBUG_ERRORS:
+                        print(f"[MC] read 실패 {name}({headdevice}, {t}): {e}", flush=True)
+                    break
+                tried_reconnect = True
+                if not _reconnect():
+                    if DEBUG_ERRORS:
+                        print(f"[MC] reconnect 실패 후 read 중단: {name}", flush=True)
+                    break
+                continue
+
+    try:
+        plc.close()
+    except Exception:
+        pass
     return result
 
 

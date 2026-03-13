@@ -13,8 +13,9 @@ from plc_mcprotocol import read_mc_variables
 
 # 폴링할 변수 개수 제한. 0이면 제한 없음. 적용 시 50ms 그룹만 제한 (나머지 그룹은 고정 개수).
 POLL_ENTRY_LIMIT = int(os.environ.get("MC_POLL_ENTRY_LIMIT", "0") or "0")
-CHUNK_SIZE = 100
-MAX_WORKERS = 2
+CHUNK_SIZE = int(os.environ.get("MC_POLL_CHUNK_SIZE", "100") or "100")
+MAX_WORKERS = int(os.environ.get("MC_POLL_MAX_WORKERS", "2") or "2")
+FAILED_POLL_RETRY_SEC = float(os.environ.get("MC_FAILED_POLL_RETRY_SEC", "1.0") or "1.0")
 
 INTERVAL_50MS = 0.05
 INTERVAL_1S = 1.0
@@ -40,7 +41,7 @@ def _poll_chunk(host, port, chunk):
 def _do_poll_entries(host, port, entries, on_parsed, on_error, interval_key=None):
     """엔트리 리스트를 청크로 나누어 병렬 폴링 후 on_parsed(merged, interval_key) 호출."""
     if not entries:
-        return
+        return False
     chunks = [entries[i : i + CHUNK_SIZE] for i in range(0, len(entries), CHUNK_SIZE)]
     merged = {}
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
@@ -53,7 +54,12 @@ def _do_poll_entries(host, port, entries, on_parsed, on_error, interval_key=None
             except Exception as e:
                 on_error(str(e))
     if merged:
+        # 타임아웃/일시 오류로 전체 값이 '-'인 경우는 기존 정상값 유지를 위해 전달하지 않는다.
+        if all(v == "-" for v in merged.values()):
+            return False
         on_parsed(merged, interval_key)
+        return True
+    return False
 
 
 def get_interval_seconds(key):
@@ -108,17 +114,23 @@ def _run_interval_loop(host, port, entries, interval_key, on_parsed, on_error, s
     """한 주기 스레드: 첫 폴링 1회 후, interval_sec마다 폴링."""
     if not entries:
         return
+    interval_sec = get_interval_seconds(interval_key) or MIN_INTERVAL_SEC
+    retry_sec = max(MIN_INTERVAL_SEC, min(FAILED_POLL_RETRY_SEC, interval_sec))
+    next_wait_sec = interval_sec
     try:
-        _do_poll_entries(host, port, entries, on_parsed, on_error, interval_key=interval_key)
+        ok = _do_poll_entries(host, port, entries, on_parsed, on_error, interval_key=interval_key)
+        next_wait_sec = interval_sec if ok else retry_sec
     except Exception as e:
         on_error(str(e))
+        next_wait_sec = retry_sec
     last_polled_at = time.monotonic()
     while not stop_event.is_set():
         # 고정 wait(interval_sec)을 쓰면 긴 주기 대기 중 주기 변경이 즉시 반영되지 않는다.
         # 짧은 tick으로 남은 시간을 재계산해, 1h -> 1s 변경도 빠르게 반영한다.
         while not stop_event.is_set():
             interval_sec = get_interval_seconds(interval_key) or MIN_INTERVAL_SEC
-            due_at = last_polled_at + interval_sec
+            retry_sec = max(MIN_INTERVAL_SEC, min(FAILED_POLL_RETRY_SEC, interval_sec))
+            due_at = last_polled_at + next_wait_sec
             now = time.monotonic()
             remaining = due_at - now
             if remaining <= 0:
@@ -128,10 +140,12 @@ def _run_interval_loop(host, port, entries, interval_key, on_parsed, on_error, s
         if stop_event.is_set():
             break
         try:
-            _do_poll_entries(host, port, entries, on_parsed, on_error, interval_key=interval_key)
+            ok = _do_poll_entries(host, port, entries, on_parsed, on_error, interval_key=interval_key)
+            next_wait_sec = interval_sec if ok else retry_sec
             last_polled_at = time.monotonic()
         except Exception as e:
             on_error(str(e))
+            next_wait_sec = retry_sec
 
 
 def run_poller(host, port, on_parsed, on_error, stop_event):
