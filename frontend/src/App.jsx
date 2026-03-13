@@ -63,14 +63,13 @@ function decodeForDisplay(raw, info) {
   }
 
   if (dt === 'string') {
-    if (typeof raw === 'string' && !/^[0-9a-fA-F]*$/.test(raw)) {
+    if (typeof raw === 'string') {
+      // 문자열이 우연히 16진수 패턴(예: "ABCC")이어도 텍스트로 그대로 표시한다.
       return raw.replace(/\0+$/, '').trim() || '-'
     }
     let hexStr = ''
     if (typeof raw === 'number' && len === 16) {
       hexStr = (raw >>> 0).toString(16).padStart(4, '0')
-    } else if (typeof raw === 'string' && /^[0-9a-fA-F]*$/.test(raw)) {
-      hexStr = raw
     } else {
       return '-'
     }
@@ -158,8 +157,16 @@ function buildDisplayVariableList(ioVariableList) {
 function getDisplayValue(row, valueMap) {
   if (row.keys.length === 1) return valueMap[row.name]
   const dt = (row.info?.dataType ?? '').toLowerCase()
-  // String 병합: 각 키 값(hex 또는 2바이트)을 이어붙여 한 문자열로
+  // String: 백엔드가 이미 문자열로 디코딩해 보내므로 첫 유효 문자열을 우선 사용한다.
+  // (연속 D주소 값을 다시 이어붙이면 겹침 구간이 중복되어 "ABC" -> "ABCC"처럼 보일 수 있음)
   if (dt === 'string') {
+    for (const k of row.keys) {
+      const v = valueMap[k]
+      if (typeof v === 'string' && v.replace(/\0+$/, '').trim()) {
+        return v
+      }
+    }
+    // 구형/대체 포맷 대응: 숫자/hex 조각만 오는 경우에만 결합 복원
     let combined = ''
     for (const k of row.keys) {
       const v = valueMap[k]
@@ -500,6 +507,7 @@ function App() {
     const len = Number(lengthBit) || 0
     if (value === '-' || value === undefined) return ''
     const le = littleEndian ?? true
+    const isStringType = String(dataType || '').toLowerCase() === 'string'
     let bits
     if (typeof value === 'number') {
       if (len <= 0 || len > 32) return ''
@@ -525,7 +533,7 @@ function App() {
           for (let i = len - 1; i >= 0; i--) bits += (u >> i) & 1 ? '1' : '0'
         }
       }
-    } else if (typeof value === 'string' && /^[0-9a-fA-F]+$/.test(value)) {
+    } else if (typeof value === 'string' && !isStringType && /^[0-9a-fA-F]+$/.test(value)) {
       const bytes = hexToBytes(value)
       if (!bytes.length) return ''
       const byteCount = Math.ceil((len || bytes.length * 8) / 8)
@@ -549,9 +557,10 @@ function App() {
   }
 
   /** 파싱된 값을 16진수 문자열로 표시 (해석된 값 기준 MSB→LSB). 문자열(ASCII)은 바이트별 hex. */
-  const formatParsedValueAsHex = (value, lengthBit, littleEndian) => {
+  const formatParsedValueAsHex = (value, lengthBit, dataType, littleEndian) => {
     const len = Number(lengthBit) || 0
     if (value === '-' || value === undefined) return ''
+    const isStringType = String(dataType || '').toLowerCase() === 'string'
     if (typeof value === 'number') {
       if (len <= 0) return ''
       const u = toUnsigned(value, len)
@@ -564,7 +573,7 @@ function App() {
       const ordered = [...bytes].reverse()
       return ordered.map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')
     }
-    if (typeof value === 'string' && /^[0-9a-fA-F]+$/.test(value)) {
+    if (typeof value === 'string' && !isStringType && /^[0-9a-fA-F]+$/.test(value)) {
       const pairs = value.match(/.{1,2}/g) || []
       return pairs.join(' ').toUpperCase()
     }
@@ -849,8 +858,8 @@ function App() {
                           </span>
                         )}
                         {showHexCol && (
-                          <span className="parsed-var-hex" title={formatParsedValueAsHex(value, info.length, false)}>
-                            {formatParsedValueAsHex(value, info.length, false)}
+                          <span className="parsed-var-hex" title={formatParsedValueAsHex(value, info.length, info.dataType, false)}>
+                            {formatParsedValueAsHex(value, info.length, info.dataType, false)}
                           </span>
                         )}
                         {showValueCol && (
